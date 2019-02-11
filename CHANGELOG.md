@@ -22,6 +22,56 @@ CHANGELOG
 
 #### Outputs
 - added `intelmq.bots.experts.mcafee.output_esm` (1265).
+<<<<<<< HEAD
+=======
+- added `intelmq.bots.outputs.blackhole` (#1279).
+- `intelmq.bots.outputs.restapi.expert`:
+  - Set the requests parameters once per session.
+
+### Documentation
+
+### Packaging
+
+### Tests
+- Travis: Change the ownership of `/opt/intelmq` to the current user.
+
+### Tools
+- `intelmqctl check`: Now uses the new `ListHandler` from utils to handle the logging in JSON output mode.
+- `intelmqdump`: Inspecting dumps locks the dump file using unix file locks (#574).
+
+### Contrib
+- `malware_name_mapping`:
+  - Added the script `apply_mapping_eventdb.py` to apply the mapping to an eventdb.
+  - Possibility to add local rules using the download tool.
+
+### Known issues
+
+
+1.1.2 (unreleased)
+------------------
+
+### Core
+- `intelmq.lib.bot`:
+  - `Bot.__handle_sighup`: Handle exceptions in `shutdown` method of bots.
+
+### Development
+
+### Harmonization
+
+### Bots
+#### Collectors
+- `intelmq.bots.collectors.stomp.collector`: Fix name of shutdown method, was ineffective in the past.
+- `intelmq.bots.collectors.mail.collector_mail_url`: Decode body if it is bytes (#1367).
+- `intelmq.bots.collectors.tcp.collector`: Timeout added. More stable version.
+
+#### Parsers
+
+#### Experts
+- `intelmq.bots.experts.sieve.expert`: Fix key definition to allow field names with numbers (`malware.hash.md5`/`sha1`, #1371).
+
+#### Outputs
+- `intelmq.bots.outputs.tcp.output`: Timeout added. When no separator used, awaits that every message is acknowledged by a simple "Ok" string to ensure more stability.
+>>>>>>> acb3c07e... TCP more stable version
 
 ### Documentation
 

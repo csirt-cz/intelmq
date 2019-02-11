@@ -39,7 +39,7 @@ INPUT2 = {'feed.name': 'Example feed 2',
           'raw': utils.base64_encode('foo text\n')}
 ORIGINAL_DATA = ('some random input{}another line').format(SEPARATOR)
 
-@unittest.skipIf(True, "hej")
+
 class Client:
     """ You find here an example of a non-intelmq client that might connect to the bot. """
 
@@ -47,6 +47,7 @@ class Client:
         sleep(1)
         connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         connection.connect(('localhost', PORT))
+        connection.settimeout(1)
         return connection
 
     def random_client(self):
@@ -54,9 +55,11 @@ class Client:
         d = bytes(ORIGINAL_DATA.split(SEPARATOR)[0], 'UTF-8')
         msg = struct.pack('>I', len(d)) + d
         connection.sendall(msg)
+        connection.recv(2)
         d = bytes(ORIGINAL_DATA.split(SEPARATOR)[1], 'UTF-8')
         msg = struct.pack('>I', len(d)) + d
         connection.sendall(msg)
+        connection.recv(2)
         connection.close()
 
 
@@ -97,7 +100,7 @@ class TestTCPCollectorBot(test.BotTestCase, unittest.TestCase):
                          'port': PORT
                          }
 
-    def test_random_input(self):
+    def Xtest_random_input(self):
         """ Check how we handle a random input, coming from an unknown source. We should put all the data to report['raw']. """
         thread = threading.Thread(target=Client().random_client)
         thread.start()
@@ -145,6 +148,7 @@ class TestTCPCollectorBot(test.BotTestCase, unittest.TestCase):
             chunk_length = 40
             for chunk in [msg[i:i + chunk_length] for i in range(0, len(msg), chunk_length)]:
                 self.con.sendall(chunk)
+            self.con.recv(2)
 
         TCPOutputBot._process = TCPOutputBot.process
         TCPOutputBot.process = chunked_process_replacement
@@ -182,7 +186,7 @@ class TestTCPCollectorBot(test.BotTestCase, unittest.TestCase):
                         new=self.mocked_config):
                 with mock.patch('intelmq.lib.utils.log', self.mocked_log):
                     self.bot.process()
-        self.bot.stop()  # let's call shutdown() and free up binded address
+        self.bot.stop()  # let's call shutdown() and free up bound address
 
         self.assertOutputQueueLen(client_count * msg_count + 2)
 
