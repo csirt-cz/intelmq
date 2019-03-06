@@ -9,10 +9,13 @@ CHANGELOG
 - `lib/bot`:
   - Dump messages locks the dump file using unix file locks (#574).
   - Print idle/rate limit time also in human readable format (#1332).
+  - `set_request_parameters`: Use `{}` as default proxy value instead of `None`. Allows updating of existing proxy dictionaries.
+  - Bots drop privileges if they run as root.
 - `lib/utils`
   - Function `unzip` to extract files from gzipped and/or tar-archives.
   - New class `ListHandler`: new handler for logging purpose which saves the messages in a list.
   - Add function `seconds_to_human`.
+  - Add function `drop_privileges`.
 
 ### Harmonization
 
@@ -23,8 +26,12 @@ CHANGELOG
 - added `intelmq.bots.collectors.rsync` (#1286).
 - `intelmq.bots.collectors.http.collector_http`:
   - Add support for uncompressing of gzipped-files (#1270).
-  - Add time-delta support for time formatted URLs.
+  - Add time-delta support for time formatted URLs (#1366).
 - `intelmq.collectors.blueliv.collector_crimeserver`: Allow setting the API URL by parameter (#1336).
+- `intelmq.collectors.mail`:
+  - Use internal lib for functionality.
+  - Add `intelmq.bots.collectors.mail.collector_mail_body`.
+  - Support for `ssl_ca_certificate` parameter (#1362).
 
 #### Parsers
 - added `intelmq.bots.parsers.mcafee.parser_atd` (#1265).
@@ -38,12 +45,19 @@ CHANGELOG
 - added `intelmq.bots.experts.mcafee.expert_mar` (1265).
 - renamed `intelmq.bots.experts.ripencc_abuse_contact.expert` to `intelmq.bots.experts.ripe.expert`, compatibility shim will be removed in version 3.0.
   - Added support for geolocation information in ripe expert with a new parameter `query_ripe_stat_geolocation` (#1317).
+- `intelmq.bots.experts.ripe.expert`:
+  - Use a requests session (#1363).
+  - Set the requests parameters once per session.
+- `intelmq.bots.experts.maxmind_geoip.expert`: New parameter `use_registered` to use the registered country (#1344).
 
 #### Outputs
 - added `intelmq.bots.experts.mcafee.output_esm` (1265).
 - added `intelmq.bots.outputs.blackhole` (#1279).
+- `intelmq.bots.outputs.restapi.expert`:
+  - Set the requests parameters once per session.
 
 ### Documentation
+- Feeds: Document abuse.ch URLhaus feed (#1379).
 
 ### Packaging
 
@@ -53,14 +67,60 @@ CHANGELOG
 ### Tools
 - `intelmqctl check`: Now uses the new `ListHandler` from utils to handle the logging in JSON output mode.
 - `intelmqdump`: Inspecting dumps locks the dump file using unix file locks (#574).
+- `intelmqctl`:
+  - After the check if the program runs as root, it tries to drop privileges. Only if this does not work, a warning is shown.
 
 ### Contrib
-* `malware_name_mapping`: Added the script `apply_mapping_eventdb.py` to apply the mapping to an eventdb.
+- `malware_name_mapping`:
+  - Added the script `apply_mapping_eventdb.py` to apply the mapping to an eventdb.
+  - Possibility to add local rules using the download tool.
 
 ### Known issues
 
 
-1.1.1 (unreleased)
+1.1.2 (unreleased)
+------------------
+
+### Core
+- `intelmq.lib.bot`:
+  - `Bot.__handle_sighup`: Handle exceptions in `shutdown` method of bots.
+
+### Development
+
+### Harmonization
+
+### Bots
+#### Collectors
+- `intelmq.bots.collectors.stomp.collector`: Fix name of shutdown method, was ineffective in the past.
+- `intelmq.bots.collectors.mail.collector_mail_url`: Decode body if it is bytes (#1367).
+- `intelmq.bots.collectors.tcp.collector`: Timeout added. More stable version.
+
+#### Parsers
+- `intelmq.bots.parsers.shadowserver`:
+  - Add support for the `Amplification-DDoS-Victim`, `HTTP-Scanners` and `ICS-Scanners` feeds (#1368).
+
+#### Experts
+- `intelmq.bots.experts.sieve.expert`: Fix key definition to allow field names with numbers (`malware.hash.md5`/`sha1`, #1371).
+
+#### Outputs
+- `intelmq.bots.outputs.tcp.output`: Timeout added. When no separator used, awaits that every message is acknowledged by a simple "Ok" string to ensure more stability.
+
+### Documentation
+- Install: Update operating system versions
+- Sieve Expert: Fix `elsif` -> `elif`.
+
+### Packaging
+
+### Tests
+
+### Tools
+
+### Contrib
+
+### Known issues
+
+
+1.1.1 (2019-01-15)
 ------------------
 
 ### Core
@@ -78,14 +138,47 @@ CHANGELOG
 - `lib/pipeline.py` (`Redis.receive`): Wait in 1s steps if redis is busy loading its snapshot from disk (#1334).
 
 ### Default configuration
-- Set `error_dump_message` to true by default.
+- Set `error_dump_message` to true by default in `defaults.conf`.
+- Fixed typo in `defaults.conf`: `proccess_manager` -> `process_manager`
 
 ### Development
 - `bin/rewrite_config_files.py`: Fix ordering of BOTS file (#1327).
 
-### Core
 
 ### Harmonization
+Update to 2018-09-26 version. New values are per taxonomy:
+- Taxonomy 'intrusions':
+  - "application-compromise"
+  - "burglary"
+  - "privileged-account-compromise"
+  - "unprivileged-account-compromise"
+- Taxonomy 'fraud':
+  - "copyright"
+  - "masquerade"
+  - "unauthorized-use-of-resources"
+- Taxonomy 'information content security':
+  - "data-loss"
+- Taxonomy 'vulnerable':
+  - "ddos-amplifier"
+  - "information-disclosure"
+  - "potentially-unwanted-accessible"
+  - "vulnerable-system"
+  - "weak-crypto"
+- Taxonomy 'availability':
+  - "dos"
+  - "outage"
+  - "sabotage"
+- Taxonomy 'abusive-content':
+  - "harmful-speech"
+  - "violence"
+- Taxonomy 'malicious code':
+  - "malware-distribution"
+- Taxonomy 'information-gathering':
+  - "social-engineering"
+  - "sniffing"
+- Taxonomy 'information content security':
+  - "Unauthorised-information-access"
+  - "Unauthorised-information-modification"
 
 ### Bots
 #### Collectors
@@ -106,6 +199,8 @@ CHANGELOG
   - Handle not installed dependency library `requests` gracefully.
 - added `intelmq.bots.collectors.shodan.collector_stream` for collecting shodan stream data (#1096).
   - Correctly check the version of the shodan library, it resulted in wrong comparisons with two digit numbers.
+- `intelmq.bots.collectors.microsoft.collector_interflow`:
+  - Add check if Cache's TTL is big enough compared to `not_older_than` and throw an error otherwise.
 
 #### Parsers
 - `intelmq.bots.parsers.misp`: Fix Object attribute (#1318).
@@ -124,6 +219,7 @@ CHANGELOG
   - Add support for `Darknet` (#1353).
 - `intelmq.bots.parsers.generic.parser_csv`: If the `skip_header` parameter was set to `True`, the header was not part of the `raw` field as returned by the `recover_line` method. The header is now saved and handled correctly by the fixed recovery method.
 - `intelmq.bots.parsers.cleanmx.parser`: Use field `first` instead of `firsttime` for `time.source` (#1329, #1348).
+- `intelmq.bots.parsers.twitter.parser`: Support for `url-normalize` >= 1.4.1 and recommend it. Added new optional parameter `default_scheme`, passed to `url-normalize` (#1356).
 
 #### Experts
 - `intelmq.bots.experts.national_cert_contact_certat.expert`:
@@ -135,6 +231,7 @@ CHANGELOG
   - Add text and more context to error messages.
   - README: Fix 'modify' to 'update' (#1340).
   - Handle empty rules file (#1343).
+- `intelmq.bots.experts.idea.expert`: Add mappings for new harmonization `classification.type` values, see above.
 
 #### Outputs
 - `intelmq.bots.outputs.redis`:
@@ -179,6 +276,9 @@ CHANGELOG
   - Handle collector's `feed.name` and `feed.provider` (#1314).
 
 ### Known issues
+- Bots started with IntelMQ-Manager stop when the webserver is restarted (#952).
+- Tests: capture logging with context manager (#1342).
+- stomp collector bot constantly uses 100% of CPU (#1364).
 
 
 1.1.0 (2018-09-05)
@@ -370,9 +470,6 @@ CHANGELOG
 1.0.6 Bugfix release (2018-08-31)
 ---------------------------------
 
-### Core
-
-### Harmonization
 
 ### Bots
 #### Collectors

@@ -64,12 +64,13 @@ class Bot(object):
                                                 id=bot_id, python=version_info,
                                                 pid=os.getpid(), intelmq=__version__)))
             self.__log_buffer.append(('debug', 'Library path: %r.' % __file__))
+            if not utils.drop_privileges():
+                raise ValueError('IntelMQ must not run as root. Dropping privileges did not work.')
 
             self.__load_defaults_configuration()
 
             self.__check_bot_id(bot_id)
             self.__bot_id = bot_id
-
             self.__init_logger()
         except Exception:
             self.__log_buffer.append(('critical', traceback.format_exc()))
@@ -125,7 +126,10 @@ class Bot(object):
             return False
         self.logger.info('Handling SIGHUP, initializing again now.')
         self.__disconnect_pipelines()
-        self.shutdown()  # disconnects, stops threads etc
+        try:
+            self.shutdown()  # disconnects, stops threads etc
+        except Exception:
+            self.logger.exception('Error during shutdown of bot.')
         self.logger.handlers = []  # remove all existing handlers
         self.__init__(self.__bot_id)
         self.__connect_pipelines()
@@ -419,12 +423,13 @@ class Bot(object):
             # loaded harmonization, stop now as this will happen repeatedly without any change
             raise exceptions.ConfigurationError('harmonization', exc.args[0])
 
-        if 'raw' in self.__current_message and len(self.__current_message['raw']) > 400:
-            tmp_msg = self.__current_message.to_dict(hierarchical=False)
-            tmp_msg['raw'] = tmp_msg['raw'][:397] + '...'
-        else:
-            tmp_msg = self.__current_message
-        self.logger.debug('Received message %r.', tmp_msg)
+        if self.logger.isEnabledFor(logging.DEBUG):
+            if 'raw' in self.__current_message and len(self.__current_message['raw']) > 400:
+                tmp_msg = self.__current_message.to_dict(hierarchical=False)
+                tmp_msg['raw'] = tmp_msg['raw'][:397] + '...'
+            else:
+                tmp_msg = self.__current_message
+            self.logger.debug('Received message %r.', tmp_msg)
 
         return self.__current_message
 
@@ -605,9 +610,9 @@ class Bot(object):
             self.logger.warning('Only %s_proxy seems to be set.'
                                 'Both http and https proxies must be set.',
                                 'http' if self.parameters.http_proxy else 'https')
-            self.proxy = None
+            self.proxy = {}
         else:
-            self.proxy = None
+            self.proxy = {}
 
         self.http_timeout_sec = getattr(self.parameters, 'http_timeout_sec', None)
         self.http_timeout_max_tries = getattr(self.parameters, 'http_timeout_max_tries', 1)

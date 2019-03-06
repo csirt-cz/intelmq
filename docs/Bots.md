@@ -138,6 +138,8 @@
     - [Information:](#information)
     - [Configuration Parameters:](#configuration-parameters)
 - [Outputs](#outputs)
+  - [Elasticsearch](#elasticsearch)
+    - [Configuration Parameters:](#configuration-parameters)
   - [File](#file)
     - [Information:](#information)
     - [Configuration Parameters:](#configuration-parameters)
@@ -239,6 +241,7 @@ This configuration resides in the file `runtime.conf` in your intelmq's configur
 * `http_user_agent`: user agent to use for the request.
 * `http_verify_cert`: path to trusted CA bundle or directory, `false` to ignore verifying SSL certificates,  or `true` (default) to verify SSL certificates
 * `ssl_client_certificate`: SSL client certificate to use.
+* `ssl_ca_certificate`: Optional string of path to trusted CA certicate. Only used by some bots.
 * `http_header`: HTTP request headers
 
 **Cache parameters**: Common redis cache parameters used in multiple bots (mainly lookup experts):
@@ -320,6 +323,7 @@ The parameter `http_timeout_max_tries` is of no use in this collector.
 * `url_regex`: regular expression of the feed URL to search for in the mail body
 * `sent_from`: filter messages by sender
 * `sent_to`: filter messages by recipient
+* `ssl_ca_certificate`: Optional string of path to trusted CA certicate. Applies only to IMAP connections, not HTTP. If the provided certificate is not found, the IMAP connection will fail on handshake. By default, no certificate is used.
 
 * * *
 
@@ -344,6 +348,38 @@ The parameter `http_timeout_max_tries` is of no use in this collector.
 * `subject_regex`: regular expression to look for a subject
 * `attach_regex`: regular expression of the name of the attachment
 * `attach_unzip`: whether to unzip the attachment (default: `true`)
+* `sent_from`: filter messages by sender
+* `sent_to`: filter messages by recipient
+* `ssl_ca_certificate`: Optional string of path to trusted CA certicate. Applies only to IMAP connections, not HTTP. If the provided certificate is not found, the IMAP connection will fail on handshake. By default, no certificate is used.
+
+* * *
+
+### Generic Mail Body Fetcher
+
+
+#### Information:
+* `name:` intelmq.bots.collectors.mail.collector_mail_body
+* `lookup:` yes
+* `public:` yes
+* `cache (redis db):` none
+* `description:` collect messages from mailboxes, forwards the bodies as reports. Each non-empty body with the matching content type is sent as individual report.
+
+#### Configuration Parameters:
+
+* **Feed parameters** (see above)
+* `mail_host`: FQDN or IP of mail server
+* `mail_user`: user account of the email account
+* `mail_password`: password associated with the user account
+* `mail_ssl`: whether the mail account uses SSL (default: `true`)
+* `folder`: folder in which to look for mails (default: `INBOX`)
+* `subject_regex`: regular expression to look for a subject
+* `sent_from`: filter messages by sender
+* `sent_to`: filter messages by recipient
+* `ssl_ca_certificate`: Optional string of path to trusted CA certicate. Applies only to IMAP connections, not HTTP. If the provided certificate is not found, the IMAP connection will fail on handshake. By default, no certificate is used.
+* `content_types`: Which bodies to use based on the content_type. Default: `true`/`['html', 'plain']` for all:
+  - string with comma separated values, e.g. `['html', 'plain']`
+  - `true`, `false`, `null`: Same as default value
+  - `string`, e.g. `'plain'`
 
 * * *
 
@@ -591,8 +627,8 @@ The cache is used to remember which files have already been downloaded. Make sur
 * **Feed parameters** (see above)
 * `api_key`: API generate in their portal
 * `file_match`: an optional regular expression to match file names
-* `not_older_than`: an optional relative (minutes) or absolute time expression to determine the oldest time of a file to be downloaded
-* `redis_cache_*` and especially `redis_cache_ttl`: Settings for the cache where file names of downloaded files are saved.
+* `not_older_than`: an optional relative (minutes) or absolute time (UTC is assumed) expression to determine the oldest time of a file to be downloaded
+* `redis_cache_*` and especially `redis_cache_ttl`: Settings for the cache where file names of downloaded files are saved. The cache's TTL must always be bigger than `not_older_than`.
 
 #### Additional functionalities
 
@@ -814,6 +850,13 @@ http://www.team-cymru.com/bogon-reference.html
 * `domain_whitelist`: domains to be filetered out
 * `substitutions`: semicolon delimited list of even length of pairs of substitutions (for example: '[.];.;,;.' substitutes '[.]' for '.' and ',' for '.')
 * `classification_type: string with a valid classification type as defined in data harmonization
+* `default_scheme`: Default scheme for URLs if not given. See also the next section.
+
+##### Default scheme
+
+The dependency `url-normalize` changed it's behavior in version 1.4.0 from using `http://` as default scheme to `https://`. Version 1.4.1 added the possibility to specify it. Thus you can only use the `default_scheme` parameter with a current version of this library >= 1.4.1, with 1.4.0 you will always get `https://` as default scheme and for older versions < 1.4.0 `http://` is used.
+
+This does not affect URLs which already include the scheme.
 
 ### Shodan
 
@@ -1034,8 +1077,6 @@ Documentation about IDEA: https://idea.cesnet.cz/en/index
 
 ### MaxMind GeoIP
 
-See the README.md
-
 #### Information:
 * `name:` maxmind-geoip
 * `lookup:` local database
@@ -1043,10 +1084,20 @@ See the README.md
 * `cache (redis db):` none
 * `description:` IP to geolocation
 
+#### Setup
+
+The bot requires the maxmind's `geoip2` Python library, version 2.2.0 has been tested.
+
+The database is available at https://geolite.maxmind.com/download/geoip/database/GeoLite2-City.mmdb.gz
+You need to unzip it.
+
+You may want to use a shell script provided in the contrib directory to keep the database up to date: `contrib/cron-jobs/update-geoip-data`
+
 #### Configuration Parameters:
 
-FIXME
-
+* `database`: Path to the local database, e.g. `"/opt/intelmq/var/lib/bots/maxmind_geoip/GeoLite2-City.mmdb"`
+* `overwrite`: boolean
+* `use_registered`: boolean. MaxMind has two country ISO codes: One for the physical location of the address and one for the registered location. Default is `false` (backwards-compatibility). See also https://github.com/certtools/intelmq/pull/1344 for a short explanation.
 
 * * *
 
@@ -1413,6 +1464,44 @@ This output bot discards all incoming messages.
 * * *
 
 
+### Elasticsearch Output Bot
+
+Output Bot that sends events to Elasticsearch
+
+#### Configuration parameters:
+
+* elastic_host       : Name/IP for the Elasticsearch server, defaults to 127.0.0.1
+* elastic_port       : Port for the Elasticsearch server, defaults to 9200
+* elastic_index      : Index for the Elasticsearch output, defaults to intelmq
+* rotate_index       : If set, will index events using the date information associated with the event.
+                       Options: 'never', 'daily', 'weekly', 'monthly', 'yearly'. Using 'intelmq' as the elastic_index, the following are examples of the generated index names:
+
+                       'never' --> intelmq
+                       'daily' --> intelmq-2018-02-02
+                       'weekly' --> intelmq-2018-42
+                       'monthly' --> intelmq-2018-02
+                       'yearly' --> intelmq-2018
+* elastic_doctype    : Elasticsearch document type for the event. Default: events
+* http_username      : http_auth basic username
+* http_password      : http_auth basic password
+* replacement_char   : If set, dots ('.') in field names will be replaced with this character prior to indexing. This is for backward compatibility with ES 2.X. Default: null. Recommended for ES2.X: '_'
+* flatten_fields     : In ES, some query and aggregations work better if the fields are flat and not JSON. Here you can provide a list of fields to convert.
+                       Can be a list of strings (fieldnames) or a string with field names separated by a comma (,). eg `extra,field2` or `['extra', 'field2']`
+                       Default: ['extra']
+
+See contrib/elasticsearch/elasticmapper for a utility for creating Elasticsearch mappings and templates.
+
+If using rotate_index, the resulting index name will be of the form [elastic_index]-[event date].
+To query all intelmq indices at once, use an alias (https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-aliases.html), or a multi-index query.
+
+The data in ES can be retrieved with the HTTP-Interface:
+
+```bash
+> curl -XGET 'http://localhost:9200/intelmq/events/_search?pretty=True'
+```
+* * *
+
+
 ### File
 
 #### Information:
@@ -1575,7 +1664,7 @@ from your installation.
 
 * * *
 
-# SMTP Output Bot
+### SMTP Output Bot
 
 Sends a MIME Multipart message containing the text and the event as CSV for every single event.
 
@@ -1619,12 +1708,13 @@ Client certificates are not supported. If `http_verify_cert` is true, TLS certif
 * `lookup:` no
 * `public:` yes
 * `cache (redis db):` none
-* `description:` TCP is the bot responsible to send events to a TCP port (Splunk, ElasticSearch, another IntelMQ, etc..).
+* `description:` TCP is the bot responsible to send events to a TCP port (Splunk, another IntelMQ, etc..).
 
 #### Configuration Parameters:
 
 * `ip`: IP of destination server
 * `hierarchical_output`: true for a nested JSON, false for a flat JSON (when sending to a TCP collector).
 * `port`: port of destination server
-* `separator`: separator of messages, eg. "\n", optional (when sending to a TCP collector, parameter shouldn't be present)
+* `separator`: separator of messages, eg. "\n", optional. When sending to a TCP collector, parameter shouldn't be present. 
+    In that case, the output waits every message is acknowledged by "Ok" message the tcp.collector bot implements.
 

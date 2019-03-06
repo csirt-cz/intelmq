@@ -13,20 +13,26 @@ See the changelog for a full list of changes.
 ### Configuration
 The bot `intelmq.bots.experts.ripencc_abuse_contact.expert` has been renamed to `intelmq.bots.experts.ripe.expert`, the compatibility shim will be removed in version 3.0. Adapt your `runtime.conf` accordingly.
 
+
+1.1.2 Bugfix release (unreleased)
+---------------------------------
+
+### Configuration
+
 ### Libraries
 
 ### Postgres databases
 
 
-1.1.1 Bugfix release (unreleased)
-----------------------------------
+1.1.1 Bugfix release (2019-01-15)
+---------------------------------
 
 ### Tools
 
 ### Harmonization
 
 ### Configuration
-In 1.1.0 the default value for the parameter `error_dump_message` was set to `false`. The recommended value, used in previous and future release` is `true` to not loose any data in case of errors. Users are advised to check the values configured in their `defaults.conf` file.
+In 1.1.0 the default value for the parameter `error_dump_message` was set to `false`. The recommended value, used in previous and future release is `true` to not loose any data in case of errors. Users are advised to check the values configured in their `defaults.conf` file.
 
 ### Libraries
 

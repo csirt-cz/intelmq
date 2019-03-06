@@ -69,6 +69,22 @@
                 "url_regex": "http://"
             }
         },
+        "Mail Body Fetcher": {
+            "description": "Monitor IMAP mailboxes and fetch mail bodies",
+            "module": "intelmq.bots.collectors.mail.collector_mail_body",
+            "parameters": {
+                "content_types": true,
+                "folder": "INBOX",
+                "mail_host": "<host>",
+                "mail_password": "<password>",
+                "mail_ssl": true,
+                "mail_user": "<user>",
+                "name": "__FEED__",
+                "provider": "__PROVIDER__",
+                "rate_limit": 60,
+                "subject_regex": "<subject>"
+            }
+        },
         "URL Fetcher": {
             "description": "Generic URL Fetcher is the bot responsible to get the report from an URL.",
             "module": "intelmq.bots.collectors.http.collector_http",
@@ -273,6 +289,7 @@
                 "access_token_secret": "",
                 "consumer_key": "",
                 "consumer_secret": "",
+                "default_scheme": "http",
                 "exclude_replies": "false",
                 "follow_urls": "",
                 "include_rts": "true",
@@ -739,7 +756,8 @@
             "module": "intelmq.bots.experts.maxmind_geoip.expert",
             "parameters": {
                 "database": "/opt/intelmq/var/lib/bots/maxmind_geoip/GeoLite2-City.mmdb",
-                "overwrite": false
+                "overwrite": false,
+                "use_registered": false
             }
         },
         "Modify": {
@@ -867,14 +885,15 @@
             "description": "Elasticsearch is the bot responsible to send events to a elasticsearch.",
             "module": "intelmq.bots.outputs.elasticsearch.output",
             "parameters": {
-                "elastic_doctype": "events",
                 "elastic_host": "127.0.0.1",
-                "elastic_index": "intelmq",
                 "elastic_port": 9200,
-                "flatten_fields": "extra",
-                "http_password": null,
+                "elastic_index": "intelmq",
+                "rotate_index": "never",
+                "elastic_doctype": "events",
                 "http_username": null,
-                "replacement_char": "_"
+                "http_password": null,
+                "flatten_fields": "extra",
+                "replacement_char": null
             }
         },
         "File": {

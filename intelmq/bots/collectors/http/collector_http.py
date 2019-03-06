@@ -36,7 +36,6 @@ class Time(object):
         self.time = datetime.now()
         if not isinstance(delta, bool):
             self.time += timedelta(**delta)
-
     def __getitem__(self, timeformat):
         return self.time.strftime(timeformat)
 
@@ -51,16 +50,17 @@ class HTTPCollectorBot(CollectorBot):
         self.extract_files = getattr(self.parameters, "extract_files", None)
 
     def process(self):
-
         formatting = getattr(self.parameters, 'http_url_formatting', False)
         if formatting:
             try:
                 http_url = self.parameters.http_url.format(time=Time(formatting))
             except TypeError:
-                self.logger.error("Wrongly formatted http_url_formatting parameter: %s. Should be boolean or a time-delta JSON.", formatting)
+                self.logger.error("Wrongly formatted http_url_formatting parameter: %s. Should be boolean or a time-delta JSON.",
+                                  formatting)
                 raise
             except KeyError:
-                self.logger.error("Wrongly formatted http_url parameter: %s. Possible misspell with 'time' variable.", self.parameters.http_url)
+                self.logger.error("Wrongly formatted http_url parameter: %s. Possible misspell with 'time' variable.",
+                                  self.parameters.http_url)
                 raise
         else:
             http_url = self.parameters.http_url
