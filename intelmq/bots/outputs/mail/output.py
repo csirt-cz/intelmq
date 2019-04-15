@@ -57,7 +57,7 @@ class MailSendOutputBot(Bot):
                 #    message.update({"source.abuse_contact": str(mail_rewrite[message["source.abuse_contact"]])})
                 #    mail = mail_rewrite[mail]
 
-                self.cache.redis.rpush("{}{}".format(self.key, field), message)
+                self.cache.redis.rpush("{}{}".format(self.key, field), message.to_json())
             self.logger.warning("done")
 
         self.acknowledge_message()
