@@ -82,6 +82,7 @@ class MailSendOutputBot(Bot):
                                 type=int)
             parser.add_argument("--gpgkey", help="fingerprint of gpg key to be used")
             parser.add_argument("--limit-results", type=int, help="Just send first N mails.")
+            parser.add_argument("--send", help="Sends now, without dialog.", action='store_true')
             parser.parse_args(sys.argv[2:], namespace=self.parameters)
 
             if self.parameters.cli == "cli":
@@ -91,7 +92,11 @@ class MailSendOutputBot(Bot):
         self.parameters.gpg = None
         if self.parameters.gpgkey:
             GPGHOME = "~/.gnupg"
-            self.parameters.gpg = GPGSafe(use_agent=False, homedir=GPGHOME)
+            try:
+                self.parameters.gpg = GPGSafe(use_agent=False, homedir=GPGHOME)
+            except Exception as e:  # when GPG program is not found in CRON, intelmqctl didn't reveal any useful information
+                print(e)
+                sys.exit(1)
             if bool(self._sign("test text")):
                 print("Successfully loaded GPG key {}".format(self.parameters.gpgkey))
             else:
@@ -140,7 +145,13 @@ class MailSendOutputBot(Bot):
                       "* 'clear' for clearing the queue\n"
                       "* 'x' to cancel\n"
                       "? ", end="")
-                i = input()
+                
+                if self.parameters.send:
+                    print(" ... Sending now!")
+                    i = "all"
+                else:
+                    i = input()
+                    
                 if i in ["x", "q"]:
                     sys.exit(0)
                 elif i == "all":
@@ -148,7 +159,7 @@ class MailSendOutputBot(Bot):
                     for mail in mails:
                         if self.build_mail(mail, send=True):
                             count += 1
-                            print("{} ".format(mail.to), end="")
+                            print("{} ".format(mail.to), end="", flush=True)
                             try:
                                 self.cache.redis.delete(mail.key)
                             except redis.exceptions.TimeoutError:
@@ -211,11 +222,23 @@ class MailSendOutputBot(Bot):
             self.logger.debug(mail_record)
             try:
                 messages = self.cache.redis.lrange(mail_record, 0, -1)
-            except redis.exceptions.TimeoutError:
-                print("!! {} timeouted, too big to read from redis".format(mail_record))  # XX will be visible both warning and print?
-                self.logger.warning("!! {} timeouted, too big to read from redis".format(mail_record))
-                self.timeouted.append(mail_record)
-                continue
+            except redis.exceptions.TimeoutError:                
+                print("Trying again: {}... ".format(mail_record), flush=True)
+                for s in range(1,4):
+                    time.sleep(s)
+                    try:
+                        messages = self.cache.redis.lrange(mail_record, 0, -1)
+                        print("... Success!", flush=True)
+                        break
+                    except redis.exceptions.TimeoutError:
+                        print("... failed ...", flush=True)
+                        continue
+                else:                    
+                    print("!! {} timeouted, too big to read from redis".format(mail_record), flush=True)  # XX will be visible both warning and print?
+                    self.logger.warning("!! {} timeouted, too big to read from redis".format(mail_record))
+                    self.timeouted.append(mail_record)
+                    continue
+                
             for message in messages:
                 lines.append(json.loads(str(message, encoding="utf-8")))
 
