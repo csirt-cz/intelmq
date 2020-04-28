@@ -9,10 +9,14 @@
 - [Announcements](#announcements)
 - [Prepare new version](#prepare-new-version)
 
-Make sure the current state is really final ;)
-You can test most of the steps described here locally before doing it real.
 
-Assumption: You are working on branch maintenance, the next version is a bug fix release. For feature releaese it is slightly different.
+General assumption: You are working on branch maintenance, the next version is a bug fix release. For feature releaeses it is slightly different.
+
+## Check before
+
+ * Make sure the current state is really final ;)
+   You can test most of the steps described here locally before doing it real.
+ * Check the upgrade functions in `intelmq/lib/upgrades.py`.
 
 ## Documentation
 
@@ -58,10 +62,13 @@ For bigger releases, probably also at IHAP, Twitter, etc. Ask your favorite soci
 ## Prepare new version
 
 Increase the version in `intelmq/version.py` and declare it as alpha version.
+Add the new version in `intelmq/lib/upgrades.py`.
 
 Add a new empty changelog and news section. For the changelog:
 
 ```
+### Configuration
+
 ### Core
 
 ### Development

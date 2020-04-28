@@ -24,6 +24,9 @@ else:
 
 
 class APICollectorBot(CollectorBot):
+    collector_empty_process = True
+    is_multithreadable = False
+
     def init(self):
         if IOLoop is None:
             raise ValueError("Could not import 'tornado'. Please install it.")
@@ -33,7 +36,7 @@ class APICollectorBot(CollectorBot):
         ])
 
         self.port = getattr(self.parameters, 'port', 5000)
-        app.listen(self.port)
+        self.server = app.listen(self.port)
         self.eventLoopThread = Thread(target=IOLoop.current().start)
         self.eventLoopThread.daemon = True
         self.eventLoopThread.start()
@@ -47,7 +50,11 @@ class APICollectorBot(CollectorBot):
         pass
 
     def shutdown(self):
-        IOLoop.current().stop()
+        if self.server:
+            # Closes the server and the socket, prevents address already in use
+            self.server.stop()
+        if IOLoop.current():
+            IOLoop.current().stop()
 
 
 BOT = APICollectorBot

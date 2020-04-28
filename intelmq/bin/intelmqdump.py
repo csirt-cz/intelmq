@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 """
 """
@@ -11,18 +11,22 @@ import os.path
 import pprint
 import re
 import readline
+import subprocess
 import sys
+import tempfile
 import traceback
+from collections import OrderedDict
 
 from termstyle import bold, green, inverted, red
-from collections import OrderedDict
 
 import intelmq.bin.intelmqctl as intelmqctl
 import intelmq.lib.exceptions as exceptions
+import intelmq.lib.message as message
 import intelmq.lib.pipeline as pipeline
 import intelmq.lib.utils as utils
-import intelmq.lib.message as message
-from intelmq import DEFAULT_LOGGING_PATH, DEFAULTS_CONF_FILE, PIPELINE_CONF_FILE, RUNTIME_CONF_FILE
+from intelmq import (DEFAULT_LOGGING_PATH, DEFAULTS_CONF_FILE,
+                     PIPELINE_CONF_FILE, RUNTIME_CONF_FILE,
+                     DEFAULT_LOGGING_LEVEL)
 
 APPNAME = "intelmqdump"
 DESCRIPTION = """
@@ -68,6 +72,7 @@ ACTIONS = {'r': ('(r)ecover by ids', True, False),
            'd': ('(d)elete file', False, True),
            's': ('(s)how by ids', True, False),
            'q': ('(q)uit', False, True),
+           'v': ('edit id', True, False),
            }
 AVAILABLE_IDS = [key for key, value in ACTIONS.items() if value[1]]
 
@@ -169,6 +174,19 @@ def main():
     parser.add_argument('botid', metavar='botid', nargs='?',
                         default=None, help='botid to inspect dumps of')
     args = parser.parse_args()
+
+    # Try to get log_level from defaults_configuration, else use default
+    try:
+        log_level = utils.load_configuration(DEFAULTS_CONF_FILE)['logging_level']
+    except Exception:
+        log_level = DEFAULT_LOGGING_LEVEL
+
+    try:
+        logger = utils.log('intelmqdump', log_level=log_level)
+    except (FileNotFoundError, PermissionError) as exc:
+        logger = utils.log('intelmqdump', log_level=log_level, log_path=False)
+        logger.error('Not logging to file: %s', exc)
+
     ctl = intelmqctl.IntelMQController()
     readline.parse_and_bind("tab: complete")
     readline.set_completer_delims('')
@@ -236,8 +254,8 @@ def main():
                 available_answers = [k for k, v in ACTIONS.items() if v[2]]
                 print('Restricted actions.')
             else:
-                # don't display list after 'show' and 'recover' command
-                if not (answer and isinstance(answer, list) and answer[0] in ['s', 'r']):
+                # don't display list after 'show', 'recover' & edit commands
+                if not (answer and isinstance(answer, list) and answer[0] in ['s', 'r', 'v']):
                     content = json.load(handle)
                     handle.seek(0)
                     content = OrderedDict(sorted(content.items(), key=lambda t: t[0]))  # sort by key here, #1280
@@ -299,7 +317,7 @@ def main():
                 default = utils.load_configuration(DEFAULTS_CONF_FILE)
                 runtime = utils.load_configuration(RUNTIME_CONF_FILE)
                 params = utils.load_parameters(default, runtime)
-                pipe = pipeline.PipelineFactory.create(params)
+                pipe = pipeline.PipelineFactory.create(params, logger)
                 try:
                     for i, (key, entry) in enumerate([item for (count, item)
                                                       in enumerate(content.items()) if count in ids]):
@@ -359,6 +377,25 @@ def main():
                     if type(value['traceback']) is not list:
                         value['traceback'] = value['traceback'].splitlines()
                     pprint.pprint(value)
+            elif answer[0] == 'v':
+                # edit given id
+                if not ids:
+                    print(red('Edit mode needs an id'))
+                    continue
+                for entry in ids:
+                    with tempfile.NamedTemporaryFile(mode='w+t', suffix='.json') as tmphandle:
+                        filename = tmphandle.name
+                        utils.write_configuration(configuration_filepath=filename,
+                                                  content=json.loads(content[meta[entry][0]]['message']),
+                                                  new=True,
+                                                  backup=False)
+                        proc = subprocess.call(['sensible-editor', filename])
+                        if proc != 0:
+                            print(red('Calling editor failed.'))
+                        else:
+                            tmphandle.seek(0)
+                            content[meta[entry][0]]['message'] = tmphandle.read()
+                            save_file(handle, content)
 
     if delete_file:
         os.remove(fname)

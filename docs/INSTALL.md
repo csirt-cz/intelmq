@@ -1,10 +1,10 @@
 **Table of Contents:**
 - [Requirements](#requirements)
 - [Install Dependencies](#install-dependencies)
-  - [Ubuntu 14.04 / Debian 8](#ubuntu-1404-debian-8)
-  - [Ubuntu 16.04 / Ubuntu 18.04 / Debian 9](#ubuntu-1604-ubuntu-1804-debian-9)
-  - [CentOS 7 / RHEL 7](#centos-7-rhel-7)
-  - [openSUSE Leap 42.3 / 15.0](#opensuse-leap-423-150)
+  - [Debian 8](#debian-8)
+  - [Ubuntu 16.04 / Ubuntu 18.04 / Debian 9](#ubuntu-1604--ubuntu-1804--debian-9)
+  - [CentOS 7 / RHEL 7](#centos-7--rhel-7)
+  - [openSUSE Leap 15.0 / 15.1](#opensuse-leap-150--151)
 - [Installation](#installation)
   - [Native Packages](#native-packages)
   - [PyPi](#pypi)
@@ -24,9 +24,9 @@ The following instructions assume the following requirements:
 
 Supported and recommended operating systems are:
 * CentOS 7
-* Debian 8 and 9
-* OpenSUSE Leap 42.3 and 15.0
-* Ubuntu: 14.04, 16.04 and 18.04
+* Debian 8, 9 and 10
+* OpenSUSE Leap 15.0 and 15.1
+* Ubuntu: 16.04, 18.04 and 19.04
 
 Other distributions which are (most probably) supported include RHEL, Fedora and openSUSE Tumbleweed.
 
@@ -34,11 +34,11 @@ Other distributions which are (most probably) supported include RHEL, Fedora and
 
 If you are using native packages, you can simply skip this section as all dependencies are installed automatically.
 
-## Ubuntu 14.04 / Debian 8
+## Debian 8
 
 ```bash
 apt-get install python3 python3-pip
-apt-get install git build-essential libffi-dev
+apt-get install build-essential libffi-dev
 apt-get install python3-dev
 apt-get install redis-server
 ```
@@ -55,7 +55,7 @@ python3.4 /tmp/get-pip.py
 
 ```bash
 apt install python3-pip python3-dnspython python3-psutil python3-redis python3-requests python3-termstyle python3-tz python3-dateutil
-apt install git redis-server
+apt install redis-server
 ```
 
 Optional dependencies:
@@ -69,7 +69,7 @@ apt install python3-sleekxmpp python3-pymongo python3-psycopg2
 ```bash
 yum install epel-release
 yum install python34 python34-devel
-yum install git gcc gcc-c++
+yum install gcc gcc-c++
 yum install redis
 ```
 
@@ -79,11 +79,11 @@ curl "https://bootstrap.pypa.io/get-pip.py" -o "/tmp/get-pip.py"
 python3.4 /tmp/get-pip.py
 ```
 
-## openSUSE Leap 42.3 / 15.0
+## openSUSE 15.0 / 15.1
 
 ```bash
 zypper install python3-dateutil python3-dnspython python3-psutil python3-pytz python3-redis python3-requests python3-python-termstyle
-zypper install git redis
+zypper install redis
 ```
 
 Optional dependencies:
@@ -106,17 +106,18 @@ Installation methods available:
 Supported Operating Systems:
 
 * **CentOS 7** (requires `epel-release`)
-* **RHEL 7**  (requires `epel-release`)
 * **Debian 8** (requires `python3-typing`)
 * **Debian 9**
-* **Fedora 27**
-* **Fedora 28**
+* **Debian 10**
 * **Fedora 29**
-* **openSUSE Leap 42.3**
+* **Fedora 30**
+* **RHEL 7**  (requires `epel-release`)
 * **openSUSE Leap 15.0**
+* **openSUSE Leap 15.1**
 * **openSUSE Tumbleweed**
 * **Ubuntu 16.04** (enable the universe repositories by appending ` universe` in `/etc/apt/sources.list` to `deb http://[...].archive.ubuntu.com/ubuntu/ xenial main`)
 * **Ubuntu 18.04** (enable the universe repositories by appending ` universe` in `/etc/apt/sources.list` to `deb http://[...].archive.ubuntu.com/ubuntu/ bionic main`)
+* **Ubuntu 19.04** (enable the universe repositories by appending ` universe` in `/etc/apt/sources.list` to `deb http://[...].archive.ubuntu.com/ubuntu/ disco main`)
 
 Get the installation instructions for your operating system here: [Installation Native Packages](https://software.opensuse.org/download.html?project=home%3Asebix%3Aintelmq&package=intelmq).
 
@@ -125,18 +126,13 @@ Please report any errors or improvements at [IntelMQ Issues](https://github.com/
 ## PyPi
 
 ```bash
-sudo -s
+sudo -i
 
 pip3 install intelmq
 
-mv `python3 -c "import site; print(site.getsitepackages()[0] + '/opt/intelmq')"` /opt/
-
 useradd -d /opt/intelmq -U -s /bin/bash intelmq
-chmod -R 0770 /opt/intelmq
-chown -R intelmq.intelmq /opt/intelmq
+sudo intelmqsetup
 ```
-
-**Note:** the reason why instructions have the `mv` command using python output is because pip3 installation method does not (and cannot) create `/opt/intelmq`, as described in [Issue #189](https://github.com/certtools/intelmq/issues/819).
 
 
 ## Additional Information

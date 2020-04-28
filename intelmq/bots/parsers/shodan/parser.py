@@ -8,7 +8,6 @@ import json
 from intelmq.lib.bot import Bot
 from intelmq.lib.utils import base64_decode
 
-
 MAPPING = {
     'hash': 'extra.shodan.event_hash',
     # 'ip': '__IGNORE__',  # using ip_str
@@ -191,6 +190,7 @@ class ShodanParserBot(Bot):
 
             event['extra.shodan'] = decoded
             event['classification.type'] = 'other'
+            event['classification.identifier'] = 'network-scan'
         else:
             event.update(self.apply_mapping(MAPPING, decoded))
             event.add('classification.type', 'other')

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 import argparse
@@ -6,7 +6,6 @@ import glob
 import json
 import os
 import traceback
-
 
 from intelmq.lib.utils import object_pair_hook_bots
 

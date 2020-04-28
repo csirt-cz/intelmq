@@ -26,6 +26,7 @@
 - [List queues](#list-queues)
 - [Log](#log)
 - [Check](#check)
+- [Configuration upgrade](#configuration-upgrade)
 - [Exit code](#exit-code)
 - [Known issues](#known-issues)
 
@@ -138,7 +139,7 @@ file-output: Bot is starting.
 file-output: Loading source pipeline and queue 'file-output-queue'.
 file-output: Connected to source queue.
 file-output: No destination queues to load.
-file-output: Pipeline ready.
+file-output: Bot initialization completed.
 file-output: Waiting for incoming message.
 ```
 
@@ -209,7 +210,7 @@ With no other arguments, bot\'s ```process()``` method will be run one time.
 ```bash
 > intelmqctl run file-output process
 file-output: Bot is starting.
-file-output: Pipeline ready.
+file-output: Bot initialization completed.
 file-output: Processing...
 file-output: Waiting for incoming message.
 file-output: Received message {'raw': '1234'}.
@@ -407,6 +408,14 @@ See the help page for more information.
 
 ## Check
 This command will do various sanity checks on the installation and especially the configuration.
+
+## Configuration upgrade
+The `intelmqctl upgrade-config` function upgrade, upgrade the configuration from previous versions to the current one.
+It keeps track of previously installed versions and the result of all "upgrade functions" in the "state file", locate in the `$var_state_path/state.json` (`/opt/intelmq/var/lib/state.json` or `/var/lib/intelmq/state.json`).
+
+This function has been introduced in version 2.0.1.
+
+It makes backups itself for all changed files before every run. Backups are overridden if they already exists. So make sure to always have a backup of your configuration just in case.
 
 ## Exit code
 In case of errors, unsuccessful operations, the exit code is higher than 0.

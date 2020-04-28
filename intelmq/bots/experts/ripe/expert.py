@@ -5,16 +5,17 @@ https://stat.ripe.net/docs/data_api
 https://github.com/RIPE-NCC/whois/wiki/WHOIS-REST-API-abuse-contact
 '''
 
-from contextlib import contextmanager
 import json
+from contextlib import contextmanager
+
+import intelmq.lib.utils as utils
+from intelmq.lib.bot import Bot
+from intelmq.lib.cache import Cache
 
 try:
     import requests
 except ImportError:
     requests = None
-
-from intelmq.lib.bot import Bot
-from intelmq.lib.cache import Cache
 
 
 STATUS_CODE_ERROR = 'HTTP status code was {}. Possible problem at the connection endpoint or network issue.'
@@ -61,32 +62,21 @@ class RIPEExpertBot(Bot):
         if requests is None:
             raise ValueError("Could not import 'requests'. Please install the package.")
 
-        self.__check_deprecated_parameters(self.parameters)
-
         self.__mode = getattr(self.parameters, 'mode', 'append')
         self.__query = {
             "db_asn": getattr(self.parameters, 'query_ripe_db_asn', True),
             "db_ip": getattr(self.parameters, 'query_ripe_db_ip', True),
-            "stat_asn": getattr(self.parameters, 'query_ripe_stat_asn', getattr(self.parameters, 'query_ripe_stat', True)),
-            "stat_ip": getattr(self.parameters, 'query_ripe_stat_ip', getattr(self.parameters, 'query_ripe_stat', True)),
+            "stat_asn": getattr(self.parameters, 'query_ripe_stat_asn', True),
+            "stat_ip": getattr(self.parameters, 'query_ripe_stat_ip', True),
             "stat_geo": getattr(self.parameters, 'query_ripe_stat_geolocation', True)
         }
 
         self.__initialize_http_session()
         self.__initialize_cache()
 
-    def __check_deprecated_parameters(self, parameters):
-        if hasattr(parameters, 'query_ripe_stat'):
-            self.logger.warning("The parameter 'query_ripe_stat' is deprecated and will be removed in 2.0."
-                                "Use 'query_ripe_stat_asn' and 'query_ripe_stat_ip' instead'.")
-
     def __initialize_http_session(self):
-        self.http_session = requests.Session()
         self.set_request_parameters()
-        self.http_session.proxies.update(self.proxy)
-        self.http_session.headers.update(self.http_header)
-        self.http_session.verify = self.http_verify_cert
-        self.http_session.cert = self.ssl_client_cert
+        self.http_session = utils.create_request_session_from_bot(self)
 
     def __initialize_cache(self):
         cache_host = getattr(self.parameters, 'redis_cache_host')
@@ -144,7 +134,9 @@ class RIPEExpertBot(Bot):
             else:
                 return json.loads(cached_value)
         else:
-            response = self.http_session.get(self.QUERY[type].format(resource), data="", timeout=self.http_timeout_sec)
+            response = self.http_session.get(self.QUERY[type].format(resource),
+                                             data="", timeout=self.http_timeout_sec)
+
             if response.status_code != 200:
                 if type == 'db_asn' and response.status_code == 404:
                     """ If no abuse contact could be found, a 404 is given. """

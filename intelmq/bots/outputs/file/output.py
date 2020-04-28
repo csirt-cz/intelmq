@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import datetime
 import os
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
 
 from intelmq.lib.bot import Bot
 from intelmq.lib.utils import base64_decode
@@ -10,6 +10,7 @@ from intelmq.lib.utils import base64_decode
 
 class FileOutputBot(Bot):
     file = None
+    is_multithreadable = False
 
     def init(self):
         # needs to be done here, because in process() FileNotFoundError handling we call init(),
@@ -46,11 +47,19 @@ class FileOutputBot(Bot):
             ev.update(event)
             # remove once #671 is done
             if 'time.observation' in ev:
-                ev['time.observation'] = datetime.datetime.strptime(ev['time.observation'],
-                                                                    '%Y-%m-%dT%H:%M:%S+00:00')
+                try:
+                    ev['time.observation'] = datetime.datetime.strptime(ev['time.observation'],
+                                                                        '%Y-%m-%dT%H:%M:%S+00:00')
+                except ValueError:
+                    ev['time.observation'] = datetime.datetime.strptime(ev['time.observation'],
+                                                                        '%Y-%m-%dT%H:%M:%S.%f+00:00')
             if 'time.source' in ev:
-                ev['time.source'] = datetime.datetime.strptime(ev['time.source'],
-                                                               '%Y-%m-%dT%H:%M:%S+00:00')
+                try:
+                    ev['time.source'] = datetime.datetime.strptime(ev['time.source'],
+                                                                   '%Y-%m-%dT%H:%M:%S+00:00')
+                except ValueError:
+                    ev['time.source'] = datetime.datetime.strptime(ev['time.source'],
+                                                                   '%Y-%m-%dT%H:%M:%S.%f+00:00')
             filename = self.parameters.file.format(event=ev)
             if not self.file or filename != self.file.name:
                 self.open_file(filename)

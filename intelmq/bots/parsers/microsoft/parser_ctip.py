@@ -8,7 +8,6 @@ import json
 
 from intelmq.lib.bot import ParserBot
 
-
 MAPPING = {"additionalmetadata": "extra.additionalmetadata",
            "description": "event_description.text",
            "externalid": "malware.name",
@@ -67,7 +66,7 @@ class MicrosoftCTIPParserBot(ParserBot):
         event.add('feed.accuracy',
                   event.get('feed.accuracy', 100) * line['confidence'] / 100,
                   overwrite=True)
-        event.add('classification.type', 'infected system')
+        event.add('classification.type', 'infected-system')
         event.add('raw', raw)
         yield event
 

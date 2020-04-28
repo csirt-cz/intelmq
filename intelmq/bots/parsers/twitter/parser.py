@@ -17,13 +17,13 @@ Parameters:
 
     classification_type : string with a valid classificationtype
 """
+import re
+
 import pkg_resources
 
-from intelmq.lib.bot import ParserBot
-from intelmq.lib.bot import utils
+from intelmq.lib.bot import Bot, utils
 from intelmq.lib.exceptions import InvalidArgument
 from intelmq.lib.harmonization import ClassificationType
-import re
 
 try:
     from url_normalize import url_normalize
@@ -39,7 +39,7 @@ except ImportError:
     update_tld_names = None
 
 
-class TwitterParserBot(ParserBot):
+class TwitterParserBot(Bot):
     def init(self):
         if url_normalize is None:
             raise ValueError("Could not import 'url-normalize'. Please install it.")

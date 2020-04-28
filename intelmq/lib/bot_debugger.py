@@ -14,15 +14,15 @@ Depending on the subcommand received, the class either
 """
 import json
 import sys
-import time
 from importlib import import_module
 from os.path import exists
 
+import time
+
 from intelmq.lib import utils
 from intelmq.lib.message import MessageFactory
-from intelmq.lib.utils import StreamHandler
-from intelmq.lib.utils import error_message_from_exc
 from intelmq.lib.pipeline import Pipeline
+from intelmq.lib.utils import StreamHandler, error_message_from_exc
 
 
 class BotDebugger:
@@ -44,8 +44,8 @@ class BotDebugger:
 
         bot = getattr(module, 'BOT')
         if run_subcommand == "message":
-            bot.init = lambda *args: None
-        self.instance = bot(bot_id)
+            bot.init = lambda *args, **kwargs: None
+        self.instance = bot(bot_id, disable_multithreading=True)
 
         if not run_subcommand:
             self.instance.start()
@@ -123,18 +123,22 @@ class BotDebugger:
             if not self.instance._Bot__source_pipeline:
                 # is None if source pipeline does not exist
                 self.instance._Bot__source_pipeline = Pipeline(None)
-            self.instance._Bot__source_pipeline.receive = lambda: msg
+            self.instance._Bot__source_pipeline.receive = lambda *args, **kwargs: msg
+            self.instance._Bot__source_pipeline.acknowledge = lambda *args, **kwargs: None
             self.instance.logger.info(" * Message from cli will be used when processing.")
 
         if dryrun:
-            self.instance.send_message = lambda msg, path="_default": self.instance.logger.info(
-                "DRYRUN: Message would be sent now{}!".format(" to the {} path".format(path) if (path != "_default") else ""))
-            self.instance.acknowledge_message = lambda: self.instance.logger.info("DRYRUN: Message would be acknowledged now!")
+            self.instance.send_message = lambda *args, **kwargs: self.instance.logger.info(
+                "DRYRUN: Message would be sent now to %r!",
+                kwargs.get('path', "_default"))
+            self.instance.acknowledge_message = lambda *args, **kwargs: self.instance.logger.info(
+                "DRYRUN: Message would be acknowledged now!")
             self.instance.logger.info(" * Dryrun only, no message will be really sent through.")
 
         if show:
             fn = self.instance.send_message
-            self.instance.send_message = lambda msg, path="_default": [self.pprint(msg), fn(msg, path=path)]
+            self.instance.send_message = lambda *args, **kwargs: [self.pprint(args or "No message generated"),
+                                                                  fn(*args, **kwargs)]
 
         self.instance.logger.info("Processing...")
         self.instance.process()

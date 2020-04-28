@@ -2,10 +2,10 @@
 """
 IDEA classification: https://idea.cesnet.cz/en/classifications
 """
-from collections import Sequence, Mapping
 from base64 import b64decode
-from uuid import uuid4
+from collections import Mapping, Sequence
 from urllib.parse import quote_plus
+from uuid import uuid4
 
 from intelmq.lib.bot import Bot
 
@@ -30,15 +30,14 @@ class IdeaExpertBot(Bot):
         "spam": "Abusive.Spam",
         "scanner": "Recon.Scanning",
         "dropzone": "Information.UnauthorizedAccess",
-        "infected system": "Malware",
-        "malware configuration": "Malware",
-        "botnet drone": "Malware",
+        "infected-system": "Malware",
+        "malware-configuration": "Malware",
         "ransomware": "Malware",
         "malware": "Malware",
-        "c&c": "Intrusion.Botnet",
+        "c2server": "Intrusion.Botnet",
         "exploit": "Attempt.Exploit",
         "brute-force": "Attempt.Login",
-        "ids alert": "Attempt.Exploit",
+        "ids-alert": "Attempt.Exploit",
         "defacement": "Intrusion.AppCompromise",
         "compromised": "Intrusion.AdminCompromise",
         "backdoor": "Intrusion.AdminCompromise",
@@ -84,8 +83,8 @@ class IdeaExpertBot(Bot):
 
         "phishing": "Phishing",
         "dropzone": "Dropzone",
-        "malware configuration": "MalwareConf",
-        "c&c": "CC",
+        "malware-configuration": "MalwareConf",
+        "c2server": "CC",
         "dga domain": "DGA",
         "proxy": "Proxy",
         "tor": "Tor",

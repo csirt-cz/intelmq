@@ -6,12 +6,17 @@ from intelmq.lib.harmonization import DateTime
 
 
 class Netlab360ParserBot(ParserBot):
-    DGA_FEED = {'http://data.netlab.360.com/feeds/dga/dga.txt'}
-    MAGNITUDE_FEED = {'http://data.netlab.360.com/feeds/ek/magnitude.txt'}
-    MIRAI_SCANNER_FEED = {'http://data.netlab.360.com/feeds/mirai-scanner/scanner.list'}
+    DGA_FEED = {'http://data.netlab.360.com/feeds/dga/dga.txt',
+                'https://data.netlab.360.com/feeds/dga/dga.txt'}
+    MAGNITUDE_FEED = {'http://data.netlab.360.com/feeds/ek/magnitude.txt',
+                      'https://data.netlab.360.com/feeds/ek/magnitude.txt'}
+    MIRAI_SCANNER_FEED = {'http://data.netlab.360.com/feeds/mirai-scanner/scanner.list',
+                          'https://data.netlab.360.com/feeds/mirai-scanner/scanner.list'}
+    HAJIME_SCANNER_FEED = {'http://data.netlab.360.com/feeds/hajime-scanner/bot.list',
+                           'https://data.netlab.360.com/feeds/hajime-scanner/bot.list'}
 
     def parse_line(self, line, report):
-        if line.startswith('#') or len(line) == 0:
+        if line.startswith('#') or not line.strip():
             self.tempdata.append(line)
 
         else:
@@ -28,7 +33,7 @@ class Netlab360ParserBot(ParserBot):
                 event.add('time.source', value[2] + ' UTC')
                 if event['time.source'] > event['time.observation']:
                     event.change('time.source', event['time.observation'])
-                event.add('classification.type', 'c&c')
+                event.add('classification.type', 'c2server')
                 event.add('event_description.url', 'http://data.netlab.360.com/dga')
 
             elif report['feed.url'] in Netlab360ParserBot.MAGNITUDE_FEED:
@@ -46,6 +51,11 @@ class Netlab360ParserBot(ParserBot):
                 event.add('destination.port', value[2].replace('dport=', ''))
                 event.add('classification.type', 'scanner')
                 event.add('classification.identifier', 'mirai', overwrite=True)
+            elif report['feed.url'] in Netlab360ParserBot.HAJIME_SCANNER_FEED:
+                event.add('time.source', value[0] + 'T00:00:00 UTC')
+                event.add('source.ip', value[1].replace('ip=', ''))
+                event.add('classification.type', 'scanner')
+                event.add('classification.identifier', 'hajime', overwrite=True)
             else:
                 raise ValueError('Unknown data feed %s.' % report['feed.url'])
 

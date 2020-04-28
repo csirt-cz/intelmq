@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 import json
 import os
@@ -30,15 +30,6 @@ DATA = [
       'intelmq/etc/runtime.conf',
       ],
      ),
-    ('/opt/intelmq/var/log/',
-     [],
-     ),
-    ('/opt/intelmq/var/lib/bots/file-output/',
-     [],
-     ),
-    ('/opt/intelmq/var/lib/bots/rsync_collector',
-     [],
-     ),
 ]
 
 exec(open(os.path.join(os.path.dirname(__file__),
@@ -62,7 +53,7 @@ setup(
     python_requires='>=3.4',
     install_requires=REQUIRES,
     tests_require=[
-        'Cerberus',
+        'Cerberus!=1.3',
         'pyyaml',
     ],
     test_suite='intelmq.tests',
@@ -75,6 +66,11 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     url='https://github.com/certtools/intelmq/',
+    project_urls={
+        'Travis CI': 'https://travis-ci.org/certtools/intelmq',
+        'Documentation': 'https://github.com/certtools/intelmq/blob/master/docs/',
+        'Source and Issue Tracker': 'https://github.com/certtools/intelmq/',
+    },
     license='AGPLv3',
     description='IntelMQ is a solution for IT security teams for collecting and '
                 'processing security feeds using a message queuing protocol.',
@@ -105,6 +101,7 @@ setup(
             'intelmqdump = intelmq.bin.intelmqdump:main',
             'intelmq_psql_initdb = intelmq.bin.intelmq_psql_initdb:main',
             'intelmq.bots.experts.sieve.validator = intelmq.bots.experts.sieve.validator:main',
+            'intelmqsetup = intelmq.bin.intelmqsetup:main',
         ] + BOTS,
     },
     scripts=[

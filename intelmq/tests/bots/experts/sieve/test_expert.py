@@ -627,7 +627,7 @@ class TestSieveExpertBot(test.BotTestCase, unittest.TestCase):
 
         # Match the second rule
         string_value_list_match_2 = EXAMPLE_INPUT.copy()
-        string_value_list_match_2['classification.type'] = 'c&c'
+        string_value_list_match_2['classification.type'] = 'c2server'
         string_value_list_expected_result_2 = string_value_list_match_2.copy()
         string_value_list_expected_result_2['comment'] = 'malicious server / service'
         self.input_message = string_value_list_match_2
@@ -953,7 +953,8 @@ class TestSieveExpertBot(test.BotTestCase, unittest.TestCase):
         numeric_match_false = EXAMPLE_INPUT.copy()
         numeric_match_false['comment'] = "keep with path"
         self.input_message = numeric_match_false
-        self.run_bot()
+        self.prepare_bot(destination_queues={"_default", "other-way"})
+        self.run_bot(prepare=False)
 
         # if doesn't match keep
         numeric_match_false = EXAMPLE_INPUT.copy()
