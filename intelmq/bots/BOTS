@@ -704,15 +704,6 @@
                 "redis_cache_ttl": "86400"
             }
         },
-        "CERT.at Contact Database": {
-            "description": "Cert.at Contact Database is the bot responsible to get CERT. Set filter to true if you want to filter out events for cert.at. Set add_cc to true if you want to overwrite an existing CC value.",
-            "module": "intelmq.bots.experts.national_cert_contact_certat.expert",
-            "parameters": {
-                "filter": false,
-                "http_verify_cert": true,
-                "overwrite_cc": false
-            }
-        },
         "Custom Filter": {
             "description": "Highly customizable filter mainly for purposes of definition exception for specific subjects, to filter them out of the pipeline",
             "module": "intelmq.bots.experts.custom_filter.expert",
