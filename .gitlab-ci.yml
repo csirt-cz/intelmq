@@ -1,0 +1,19 @@
+trigger-proki-intelmq-build-development:
+  stage: build
+  before_script:
+    - apk add curl
+  script:
+    - HTTP_CODE=$(curl -w "%{http_code}" -s -X POST -F token="$PROKI_INTELMQ_TRIGGER_TOKEN" -F ref=development -o /dev/null https://gitlab.labs.nic.cz/api/v4/projects/935/trigger/pipeline)
+    - test "$HTTP_CODE" = "201"
+  only:
+    - test
+    
+trigger-proki-intelmq-build-production:
+  stage: build
+  before_script:
+    - apk add curl
+  script:
+    - HTTP_CODE=$(curl -w "%{http_code}" -s -X POST -F token="$PROKI_INTELMQ_TRIGGER_TOKEN" -F ref=master -o /dev/null https://gitlab.labs.nic.cz/api/v4/projects/935/trigger/pipeline)
+    - test "$HTTP_CODE" = "201"
+  only:
+    - master
