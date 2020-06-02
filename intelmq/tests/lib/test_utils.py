@@ -11,6 +11,7 @@ import io
 import os
 import tempfile
 import unittest
+import requests
 
 import intelmq.lib.utils as utils
 
@@ -110,10 +111,20 @@ class TestUtils(unittest.TestCase):
         """Tests if the parse_logline() function works as expected"""
         line = ("2015-05-29 21:00:24,379 - malware-domain-list-collector - "
                 "ERROR - Something went wrong")
+        thread = ("2015-05-29 21:00:24,379 - malware-domain-list-collector.4 - "
+                  "ERROR - Something went wrong")
 
         fields = utils.parse_logline(line)
         self.assertDictEqual({'date': '2015-05-29T21:00:24.379000',
                               'bot_id': 'malware-domain-list-collector',
+                              'thread_id': None,
+                              'log_level': 'ERROR',
+                              'message': 'Something went wrong'},
+                             fields)
+        fields = utils.parse_logline(thread)
+        self.assertDictEqual({'date': '2015-05-29T21:00:24.379000',
+                              'bot_id': 'malware-domain-list-collector',
+                              'thread_id': 4,
                               'log_level': 'ERROR',
                               'message': 'Something went wrong'},
                              fields)
@@ -132,10 +143,19 @@ class TestUtils(unittest.TestCase):
         """Tests if the parse_logline() function parses syslog correctly. """
         line = ("Feb 22 10:17:10 host malware-domain-list-collector: ERROR "
                 "Something went wrong")
+        thread = ("Feb 22 10:17:10 host malware-domain-list-collector.4: ERROR "
+                "Something went wrong")
 
         actual = utils.parse_logline(line, regex=utils.SYSLOG_REGEX)
         self.assertEqual({'bot_id': 'malware-domain-list-collector',
                           'date': '%d-02-22T10:17:10' % datetime.datetime.now().year,
+                          'thread_id': None,
+                          'log_level': 'ERROR',
+                          'message': 'Something went wrong'}, actual)
+        actual = utils.parse_logline(thread, regex=utils.SYSLOG_REGEX)
+        self.assertEqual({'bot_id': 'malware-domain-list-collector',
+                          'date': '%d-02-22T10:17:10' % datetime.datetime.now().year,
+                          'thread_id': 4,
                           'log_level': 'ERROR',
                           'message': 'Something went wrong'}, actual)
 
@@ -155,6 +175,74 @@ class TestUtils(unittest.TestCase):
             utils.parse_relative('1 hou')
         with self.assertRaises(ValueError):
             utils.parse_relative('1 minute')
+
+    def test_seconds_to_human(self):
+        """ Test seconds_to_human """
+        self.assertEqual(utils.seconds_to_human(60), '1m')
+        self.assertEqual(utils.seconds_to_human(3600), '1h')
+        self.assertEqual(utils.seconds_to_human(86401), '1d 1s')
+        self.assertEqual(utils.seconds_to_human(64.2), '1m 4s')
+        self.assertEqual(utils.seconds_to_human(64.2, precision=1),
+                         '1.0m 4.2s')
+
+    def test_version_smaller(self):
+        """ Test version_smaller """
+        self.assertTrue(utils.version_smaller((1, 0, 0), (1, 1, 0)))
+        self.assertTrue(utils.version_smaller((1, 0, 0), (1, 0, 1, 'alpha')))
+        self.assertFalse(utils.version_smaller((1, 0, 0, 'beta', 3), (1, 0, 0, 'alpha', 0)))
+        self.assertFalse(utils.version_smaller((1, 0, 0), (1, 0, 0, 'alpha', 99)))
+        self.assertFalse(utils.version_smaller((1, 0, 0), (1, 0, 0, 'beta')))
+
+    def test_unzip_tar_gz(self):
+        """ Test the unzip function with a tar gz file. """
+        filename = os.path.join(os.path.dirname(__file__), '../assets/two_files.tar.gz')
+        with open(filename, 'rb') as fh:
+            result = utils.unzip(fh.read(), extract_files=True)
+        self.assertEqual(tuple(result), (b'bar text\n', b'foo text\n'))
+
+    def test_unzip_tar_gz_return_names(self):
+        """ Test the unzip function with a tar gz file and return_names. """
+        filename = os.path.join(os.path.dirname(__file__), '../assets/two_files.tar.gz')
+        with open(filename, 'rb') as fh:
+            result = utils.unzip(fh.read(), extract_files=True, return_names=True)
+        self.assertEqual(tuple(result), (('bar', b'bar text\n'),
+                                         ('foo', b'foo text\n')))
+
+    def test_unzip_gz(self):
+        """ Test the unzip function with a gz file. """
+        filename = os.path.join(os.path.dirname(__file__), '../assets/foobar.gz')
+        with open(filename, 'rb') as fh:
+            result = utils.unzip(fh.read(), extract_files=True)
+        self.assertEqual(result, (b'bar text\n', ))
+
+    def test_unzip_gz_name(self):
+        """ Test the unzip function with a gz file. """
+        filename = os.path.join(os.path.dirname(__file__), '../assets/foobar.gz')
+        with open(filename, 'rb') as fh:
+            result = utils.unzip(fh.read(), extract_files=True, return_names=True)
+        self.assertEqual(result, ((None, b'bar text\n'), ))
+
+    def test_unzip_zip(self):
+        """ Test the unzip function with a zip file. """
+        filename = os.path.join(os.path.dirname(__file__), '../assets/two_files.zip')
+        with open(filename, 'rb') as fh:
+            result = utils.unzip(fh.read(), extract_files=True)
+        self.assertEqual(tuple(result), (b'bar text\n', b'foo text\n'))
+
+    def test_unzip_zip_return_names(self):
+        """ Test the unzip function with a zip file and return_names. """
+        filename = os.path.join(os.path.dirname(__file__), '../assets/two_files.zip')
+        with open(filename, 'rb') as fh:
+            result = utils.unzip(fh.read(), extract_files=True, return_names=True)
+        self.assertEqual(tuple(result), (('bar', b'bar text\n'),
+                                         ('foo', b'foo text\n')))
+
+    def test_file_name_from_response(self):
+        """ test file_name_from_response """
+        response = requests.Response()
+        response.headers['Content-Disposition'] = 'attachment; filename=2019-09-09-drone_brute_force-austria-geo.csv'
+        self.assertEqual(utils.file_name_from_response(response),
+                         '2019-09-09-drone_brute_force-austria-geo.csv')
 
 
 if __name__ == '__main__':  # pragma: no cover

@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
-from collections import Sequence, Mapping
+"""
+IDEA classification: https://idea.cesnet.cz/en/classifications
+"""
 from base64 import b64decode
-from uuid import uuid4
+from collections import Mapping, Sequence
 from urllib.parse import quote_plus
+from uuid import uuid4
 
 from intelmq.lib.bot import Bot
 
@@ -27,15 +30,14 @@ class IdeaExpertBot(Bot):
         "spam": "Abusive.Spam",
         "scanner": "Recon.Scanning",
         "dropzone": "Information.UnauthorizedAccess",
-        "infected system": "Malware",
-        "malware configuration": "Malware",
-        "botnet drone": "Malware",
+        "infected-system": "Malware",
+        "malware-configuration": "Malware",
         "ransomware": "Malware",
         "malware": "Malware",
-        "c&c": "Intrusion.Botnet",
+        "c2server": "Intrusion.Botnet",
         "exploit": "Attempt.Exploit",
         "brute-force": "Attempt.Login",
-        "ids alert": "Attempt.Exploit",
+        "ids-alert": "Attempt.Exploit",
         "defacement": "Intrusion.AppCompromise",
         "compromised": "Intrusion.AdminCompromise",
         "backdoor": "Intrusion.AdminCompromise",
@@ -51,6 +53,29 @@ class IdeaExpertBot(Bot):
         "test": "Test",
         "unauthorized-command": "Intrusion.AdminCompromise",
         "unauthorized-login": "Intrusion.AdminCompromise",
+        "violence": "Abusive.Violence",
+        "data-loss": "Information",
+        "burglary": "Intrusion",
+        "weak-crypto": "Vulnerable.Config",
+        "Unauthorised-information-access": "Information.UnauthorizedAccess",
+        "privileged-account-compromise": "Intrusion.AdminCompromise",
+        "potentially-unwanted-accessible": "Vulnerable.Open",
+        "application-compromise": "Intrusion.AppCompromise",
+        "unauthorized-use-of-resources": "Fraud.UnauthorizedUsage",
+        "masquerade": "Fraud.Scam",
+        "harmful-speech": "Abusive.Harassment",
+        "unprivileged-account-compromise": "Intrusion.UserCompromise",
+        "social-engineering": "Recon.SocialEngineering",
+        "dos": "Availability.DoS",
+        "information-disclosure": "Information.UnauthorizedAccess",
+        "sniffing": "Recon.Sniffing",
+        "vulnerable-system": "Vulnerable.Config",
+        "Unauthorised-information-modification": "Information.UnauthorizedModification",
+        "sabotage": "Availability.Sabotage",
+        "malware-distribution": "Malware",
+        "outage": "Availability.Outage",
+        "ddos-amplifier": "Intrusion.Botnet",
+        "copyright": "Fraud.Copyright",
     }
 
     type_to_source_type = {
@@ -58,11 +83,12 @@ class IdeaExpertBot(Bot):
 
         "phishing": "Phishing",
         "dropzone": "Dropzone",
-        "malware configuration": "MalwareConf",
-        "c&c": "CC",
+        "malware-configuration": "MalwareConf",
+        "c2server": "CC",
         "dga domain": "DGA",
         "proxy": "Proxy",
         "tor": "Tor",
+        "malware-distribution": "Malware"
     }
 
     def init(self):

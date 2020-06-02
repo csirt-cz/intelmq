@@ -12,6 +12,10 @@ EXAMPLE_INPUT = {"__type": "Event",
                  "time.observation": "2017-01-01T00:00:00+00:00",
                  }
 
+EXAMPLE_MD5 = {"__type": "Event",
+               "malware.hash.md5": "0904631316551",
+               }
+
 
 @test.skip_exotic()
 class TestSieveExpertBot(test.BotTestCase, unittest.TestCase):
@@ -623,7 +627,7 @@ class TestSieveExpertBot(test.BotTestCase, unittest.TestCase):
 
         # Match the second rule
         string_value_list_match_2 = EXAMPLE_INPUT.copy()
-        string_value_list_match_2['classification.type'] = 'c&c'
+        string_value_list_match_2['classification.type'] = 'c2server'
         string_value_list_expected_result_2 = string_value_list_match_2.copy()
         string_value_list_expected_result_2['comment'] = 'malicious server / service'
         self.input_message = string_value_list_match_2
@@ -949,8 +953,8 @@ class TestSieveExpertBot(test.BotTestCase, unittest.TestCase):
         numeric_match_false = EXAMPLE_INPUT.copy()
         numeric_match_false['comment'] = "keep with path"
         self.input_message = numeric_match_false
-        self.run_bot()
-        self.assertMessageEqual(0, numeric_match_false, path="other-way")
+        self.prepare_bot(destination_queues={"_default", "other-way"})
+        self.run_bot(prepare=False)
 
         # if doesn't match keep
         numeric_match_false = EXAMPLE_INPUT.copy()
@@ -959,6 +963,17 @@ class TestSieveExpertBot(test.BotTestCase, unittest.TestCase):
         self.run_bot()
         self.assertMessageEqual(0, numeric_match_false, path="_default")
 
+    def test_numeric_key(self):
+        """ Test == numeric match """
+        self.sysconfig['file'] = os.path.join(os.path.dirname(__file__),
+                                              'test_sieve_files/test_numeric_key.sieve')
+
+        # if match drop
+        numeric_match_true = EXAMPLE_INPUT.copy()
+        numeric_match_true['comment'] = "drop"
+        self.input_message = numeric_match_true
+        self.run_bot()
+        self.assertMessageEqual(0, numeric_match_true)
 
 
 if __name__ == '__main__':  # pragma: no cover

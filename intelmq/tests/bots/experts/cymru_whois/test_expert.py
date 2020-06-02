@@ -71,15 +71,25 @@ EXAMPLE_6TO4_INPUT = {"__type": "Event",
 EXAMPLE_6TO4_OUTPUT = {"__type": "Event",
                   "source.ip": "2002:3ee0:3972:0001::1",
                   "source.network": "2002::/16",
-                  "source.asn": 6939,
-                  "source.as_name": "HURRICANE - Hurricane Electric LLC, US",
+                  "source.asn": 1103,
+                  "source.as_name": "SURFNET-NL SURFnet, The Netherlands, NL",
+                  "time.observation": "2015-01-01T00:00:00+00:00",
+                  }
+OVERWRITE_OUT = {"__type": "Event",
+                  "source.ip": "93.184.216.34",
+                  "source.geolocation.cc": "AA",
+                  "source.registry": "LACNIC",
+                  "source.network": "93.184.216.0/24",
+                  "source.allocated": "2008-06-02T00:00:00+00:00",
+                  "source.asn": 15133,
+                  "source.as_name": "EDGECAST - MCI Communications Services, Inc. d/b/a Verizon Business, US",
                   "time.observation": "2015-01-01T00:00:00+00:00",
                   }
 
+
 @test.skip_redis()
 @test.skip_internet()
-@unittest.skipIf(os.getenv('TRAVIS') == 'true' and os.getenv('CI') == 'true',
-                 'Cymru Whois tests disable on travis.')
+@test.skip_travis()
 class TestCymruExpertBot(test.BotTestCase, unittest.TestCase):
     """
     A TestCase for AbusixExpertBot.
@@ -89,6 +99,7 @@ class TestCymruExpertBot(test.BotTestCase, unittest.TestCase):
     def set_bot(cls):
         cls.bot_reference = CymruExpertBot
         cls.use_cache = True
+        cls.sysconfig = {'overwrite': True}
 
     def test_ipv4_lookup(self):
         self.input_message = EXAMPLE_INPUT
@@ -114,6 +125,13 @@ class TestCymruExpertBot(test.BotTestCase, unittest.TestCase):
         self.input_message = EXAMPLE_6TO4_INPUT
         self.run_bot()
         self.assertMessageEqual(0, EXAMPLE_6TO4_OUTPUT)
+
+    def test_overwrite(self):
+        self.input_message = EXAMPLE_INPUT.copy()
+        self.input_message["source.geolocation.cc"] = "AA"
+        self.input_message["source.registry"] = "LACNIC"
+        self.run_bot(parameters={'overwrite' : False})
+        self.assertMessageEqual(0, OVERWRITE_OUT)
 
     @unittest.expectedFailure
     def test_missing_asn(self):

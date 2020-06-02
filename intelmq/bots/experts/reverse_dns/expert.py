@@ -3,7 +3,6 @@
 from datetime import datetime
 
 import dns
-from dns import resolver, reversename
 
 from intelmq.lib.bot import Bot
 from intelmq.lib.cache import Cache
@@ -29,6 +28,12 @@ class ReverseDnsExpertBot(Bot):
                                    None)
                            )
 
+        if not hasattr(self.parameters, 'overwrite'):
+            self.logger.warning("Parameter 'overwrite' is not given, assuming 'True'. "
+                                "Please set it explicitly, default will change to "
+                                "'False' in version 3.0.0'.")
+        self.overwrite = getattr(self.parameters, 'overwrite', True)
+
     def process(self):
         event = self.receive_message()
 
@@ -38,6 +43,8 @@ class ReverseDnsExpertBot(Bot):
             ip_key = key % "ip"
 
             if ip_key not in event:
+                continue
+            if key % 'reverse_dns' in event and not self.overwrite:
                 continue
 
             ip = event.get(ip_key)
@@ -59,9 +66,9 @@ class ReverseDnsExpertBot(Bot):
             elif cachevalue:
                 result = cachevalue
             else:
-                rev_name = reversename.from_address(ip)
+                rev_name = dns.reversename.from_address(ip)
                 try:
-                    results = resolver.query(rev_name, "PTR")
+                    results = dns.resolver.query(rev_name, "PTR")
                     expiration = results.expiration
                     for result in results:
                         # use first valid result
@@ -83,7 +90,7 @@ class ReverseDnsExpertBot(Bot):
                                    ttl=int(ttl.total_seconds()))
 
             if result is not None:
-                event.add(key % 'reverse_dns', str(result), overwrite=True)
+                event.add(key % 'reverse_dns', str(result), overwrite=self.overwrite)
 
         self.send_message(event)
         self.acknowledge_message()

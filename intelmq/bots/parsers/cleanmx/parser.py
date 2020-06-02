@@ -1,6 +1,6 @@
-from xml.etree import ElementTree
-
 from collections import OrderedDict
+from datetime import datetime
+from xml.etree import ElementTree
 
 from intelmq.lib import utils
 from intelmq.lib.bot import ParserBot
@@ -9,8 +9,8 @@ from intelmq.lib.exceptions import ConfigurationError
 PHISHING = OrderedDict([
     ("line", "__IGNORE__"),
     ("id", "extra"),
-    ("first", "__IGNORE__"),
-    ("firsttime", "time.source"),
+    ("first", "time.source"),
+    ("firsttime", "__IGNORE__"),
     ("last", "__IGNORE__"),
     ("lasttime", "__IGNORE__"),
     ("phishtank", "extra"),
@@ -37,8 +37,8 @@ VIRUS = OrderedDict([
     ("line", "__IGNORE__"),
     ("id", "extra"),
     ("sub", "extra"),
-    ("first", "__IGNORE__"),
-    ("firsttime", "time.source"),
+    ("first", "time.source"),
+    ("firsttime", "__IGNORE__"),
     ("last", "__IGNORE__"),
     ("lasttime", "__IGNORE__"),
     ("scanner", "extra"),
@@ -134,7 +134,13 @@ class CleanMXParserBot(ParserBot):
                     continue
 
                 if key == "time.source":
-                    value = value + " UTC"
+                    try:
+                        value = (datetime.utcfromtimestamp(int(value)).isoformat() + " UTC")
+                    except TypeError as e:
+                        self.logger.warning(
+                            'No valid "first" field epoch time found, skipping '
+                            'timestamp. Got {} {}'.format(value, e))
+                        continue
 
                 if key == "source.asn":
                     if value.upper().startswith("ASNA"):

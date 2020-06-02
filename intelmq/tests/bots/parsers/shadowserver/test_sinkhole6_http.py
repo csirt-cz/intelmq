@@ -7,23 +7,19 @@ import intelmq.lib.test as test
 import intelmq.lib.utils as utils
 from intelmq.bots.parsers.shadowserver.parser import ShadowserverParserBot
 
-with open(os.path.join(os.path.dirname(__file__), 'sinkhole6_http.csv')) as handle:
+with open(os.path.join(os.path.dirname(__file__), 'testdata/sinkhole6_http.csv')) as handle:
     EXAMPLE_FILE = handle.read()
 EXAMPLE_LINES = EXAMPLE_FILE.splitlines()
-
-with open(os.path.join(os.path.dirname(__file__),
-                       'sinkhole6_http_RECONSTRUCTED.csv')) as handle:
-    RECONSTRUCTED_FILE = handle.read()
-RECONSTRUCTED_LINES = RECONSTRUCTED_FILE.splitlines()
 
 EXAMPLE_REPORT = {"feed.name": "ShadowServer IPv6 Sinkhole HTTP Drone",
                   "raw": utils.base64_encode(EXAMPLE_FILE),
                   "__type": "Report",
                   "time.observation": "2015-01-01T00:00:00+00:00",
+                  "extra.file_name": "2019-01-01-sinkhole6_http-test-geo.csv",
                   }
 EVENTS = [{'__type': 'Event',
            'classification.taxonomy': 'malicious code',
-           'classification.type': 'infected system',
+           'classification.type': 'infected-system',
            'destination.asn': 64511,
            'destination.fqdn': '198-51-100-38.example.net',
            'destination.geolocation.cc': 'NL',
@@ -33,8 +29,8 @@ EVENTS = [{'__type': 'Event',
            'feed.name': 'ShadowServer IPv6 Sinkhole HTTP Drone',
            'malware.name': 'ghost-push',
            'protocol.transport': 'tcp',
-           'raw': utils.base64_encode('\n'.join([RECONSTRUCTED_LINES[0],
-                                                 RECONSTRUCTED_LINES[1], ''])),
+           'raw': utils.base64_encode('\n'.join([EXAMPLE_LINES[0],
+                                                 EXAMPLE_LINES[1]])),
            'source.asn': 64511,
    'source.geolocation.cc': 'AT',
            'source.ip': '2001:db8:abcd:12::',
@@ -42,7 +38,7 @@ EVENTS = [{'__type': 'Event',
            'time.source': '2018-04-08T09:17:36+00:00'},
           {'__type': 'Event',
            'classification.taxonomy': 'malicious code',
-           'classification.type': 'infected system',
+           'classification.type': 'infected-system',
            'destination.asn': 64511,
            'destination.fqdn': '198-51-100-38.example.net',
            'destination.geolocation.cc': 'NL',
@@ -53,8 +49,8 @@ EVENTS = [{'__type': 'Event',
            'destination.url': 'http://198-51-100-38.example.net/',
            'feed.name': 'ShadowServer IPv6 Sinkhole HTTP Drone',
            'protocol.transport': 'tcp',
-           'raw': utils.base64_encode('\n'.join([RECONSTRUCTED_LINES[0],
-                                                 RECONSTRUCTED_LINES[2], ''])),
+           'raw': utils.base64_encode('\n'.join([EXAMPLE_LINES[0],
+                                                 EXAMPLE_LINES[2]])),
            'source.asn': 64511,
            'source.geolocation.cc': 'AT',
            'source.ip': '2001:db8:abcd:12::',
@@ -62,7 +58,7 @@ EVENTS = [{'__type': 'Event',
            'time.source': '2018-04-08T15:03:03+00:00'},
           {'__type': 'Event',
            'classification.taxonomy': 'malicious code',
-           'classification.type': 'infected system',
+           'classification.type': 'infected-system',
            'destination.asn': 64511,
            'destination.fqdn': '198-51-100-38.example.net',
            'destination.geolocation.cc': 'NL',
@@ -73,8 +69,8 @@ EVENTS = [{'__type': 'Event',
            'feed.name': 'ShadowServer IPv6 Sinkhole HTTP Drone',
            'malware.name': 'xcodeghost',
            'protocol.transport': 'tcp',
-           'raw': utils.base64_encode('\n'.join([RECONSTRUCTED_LINES[0],
-                                                 RECONSTRUCTED_LINES[3], ''])),
+           'raw': utils.base64_encode('\n'.join([EXAMPLE_LINES[0],
+                                                 EXAMPLE_LINES[3]])),
            'source.asn': 64511,
            'source.geolocation.cc': 'AT',
            'source.ip': '2001:db8:abcd:12::',
@@ -92,7 +88,6 @@ class TestShadowserverParserBot(test.BotTestCase, unittest.TestCase):
     def set_bot(cls):
         cls.bot_reference = ShadowserverParserBot
         cls.default_input_message = EXAMPLE_REPORT
-        cls.sysconfig = {'feedname': 'IPv6-Sinkhole-HTTP-Drone'}
 
     def test_event(self):
         """ Test if correct Event has been produced. """

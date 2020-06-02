@@ -44,6 +44,7 @@ class TCPCollectorBot(CollectorBot):
                 report = self.new_report()
                 report.add("raw", msg)
                 self.send_message(report)
+
                 if msg:  # if the partner connection ended, our message are already sent
                     conn.sendall(b"Ok")
                     pass

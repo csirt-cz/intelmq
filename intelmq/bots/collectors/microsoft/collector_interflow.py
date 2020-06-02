@@ -29,23 +29,46 @@ Parameter:
 import gzip
 import io
 import re
+import sys
 from datetime import datetime, timedelta
 
 import pytz
-import requests
 from dateutil import parser
 
 from intelmq.lib.bot import CollectorBot
 from intelmq.lib.cache import Cache
-from intelmq.lib.utils import parse_relative
+from intelmq.lib.utils import parse_relative, create_request_session_from_bot
+
+try:
+    import requests
+except ImportError:
+    requests = None
+
 
 URL_LIST = 'https://interflow.azure-api.net/file/api/file/listsharedfiles'
 URL_DOWNLOAD = 'https://interflow.azure-api.net/file/api/file/download?fileName=%s'
 
 
 class MicrosoftInterflowCollectorBot(CollectorBot):
+
+    def check_ttl_time(self):
+        """
+        Checks if the cache's TTL is big enough compared to the chosen
+        time frame so that the bot does not process the same data over and
+        over.
+        """
+        if isinstance(self.time_match, datetime):  # absolute
+            now = datetime.now(tz=pytz.timezone('UTC'))
+            if now - timedelta(seconds=self.parameters.redis_cache_ttl) > self.time_match:
+                raise ValueError("The cache's TTL must be higher than 'not_older_than', "
+                                 "otherwise the bot is processing the same data over and over again.")
+
     def init(self):
+        if requests is None:
+            raise ValueError('Could not import requests. Please install it.')
+
         self.set_request_parameters()
+
         self.http_header['Ocp-Apim-Subscription-Key'] = self.parameters.api_key
         if self.parameters.file_match:
             self.file_match = re.compile(self.parameters.file_match)
@@ -56,12 +79,22 @@ class MicrosoftInterflowCollectorBot(CollectorBot):
             try:
                 self.time_match = timedelta(minutes=parse_relative(self.parameters.not_older_than))
             except ValueError:
-                self.time_match = parser.parse(self.parameters.not_older_than)
+                if sys.version_info >= (3, 6):
+                    self.time_match = parser.parse(self.parameters.not_older_than).astimezone(pytz.utc)
+                else:  # "astimezone() cannot be applied to a naive datetime" otherwise
+                    if '+' not in self.parameters.not_older_than:
+                        self.parameters.not_older_than += '+00:00'
+                    self.time_match = parser.parse(self.parameters.not_older_than)
                 self.logger.info("Filtering files absolute %r.", self.time_match)
+                self.check_ttl_time()
             else:
                 self.logger.info("Filtering files relative %r.", self.time_match)
+                if timedelta(seconds=self.parameters.redis_cache_ttl) < self.time_match:
+                    raise ValueError("The cache's TTL must be higher than 'not_older_than', "
+                                     "otherwise the bot is processing the same data over and over again.")
         else:
             self.time_match = None
+        self.session = create_request_session_from_bot(self)
 
         self.cache = Cache(self.parameters.redis_cache_host,
                            self.parameters.redis_cache_port,
@@ -72,14 +105,9 @@ class MicrosoftInterflowCollectorBot(CollectorBot):
                            )
 
     def process(self):
+        self.check_ttl_time()
         self.logger.debug('Downloading file list.')
-        files = requests.get(URL_LIST,
-                             auth=self.auth,
-                             proxies=self.proxy,
-                             headers=self.http_header,
-                             verify=self.http_verify_cert,
-                             cert=self.ssl_client_cert,
-                             timeout=self.http_timeout_sec)
+        files = self.session.get(URL_LIST)
         files.raise_for_status()
         self.logger.debug('Downloaded file list, %s entries.', len(files.json()))
         for file in files.json():
@@ -101,13 +129,7 @@ class MicrosoftInterflowCollectorBot(CollectorBot):
 
             self.logger.debug('Processing file %r.', file['Name'])
             download_url = URL_DOWNLOAD % file['Name']
-            download = requests.get(download_url,
-                                    auth=self.auth,
-                                    proxies=self.proxy,
-                                    headers=self.http_header,
-                                    verify=self.http_verify_cert,
-                                    cert=self.ssl_client_cert,
-                                    timeout=self.http_timeout_sec)
+            download = self.session.get(download_url)
             download.raise_for_status()
             if download_url.endswith('.gz'):
                 raw = gzip.open(io.BytesIO(download.content)).read().decode()

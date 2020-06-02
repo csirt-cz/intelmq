@@ -1,10 +1,41 @@
 # -*- coding: utf-8 -*-
 """
-Copyright (C) 2016 by Bundesamt für Sicherheit in der Informationstechnik
+Copyright (c)2016-2018 by Bundesamt für Sicherheit in der Informationstechnik (BSI)
 
-Software engineering by Intevation GmbH
+Software engineering by BSI & Intevation GmbH
 
 This is a configuration File for the shadowserver parser
+
+In the following, *intelmqkey* are arbitrary keys from intelmq's harmonization
+and *shadowkey* is a column name from shadowserver's data.
+
+Every bot-type is defined by a dictionary with three values:
+- `required_fields`: A list of tuples containing intelmq's field name, field
+  name from data and an optional conversion function. Errors are raised, if the
+  field does not exists in data.
+- `optional_fields`: Same format as above, but does not raise errors if the
+  field does not exist. If there's no mapping to an intelmq field, you can set
+  the intelmqkey to `extra.` and the field will be added to the extra field
+  using the original field name. See section below for possible tuple-values.
+- `constant_fields`: A dictionary with a static mapping of field name to data,
+  e.g. to set classifications or protocols.
+
+The tuples can be of following format:
+
+- `('intelmqkey', 'shadowkey')`, the data from the column *shadowkey* will be
+  saved in the event's field *intelmqkey*. Logically equivalent to:
+  `event[`*intelmqkey*`] = row[`*shadowkey*`]`.
+- `('intelmqkey', 'shadowkey', conversion_function)`, the given function will be
+  used to convert and/or validate the data. Logically equivalent to:
+  `event[`*intelmqkey*`] = conversion_function(row[`*shadowkey*`)]`.
+- `('intelmqkey', 'shadowkey', conversion_function, True)`, the function gets
+  two parameters here, the second one is the full row (as dictionary). Logically
+  equivalent to:
+  `event[`*intelmqkey*`] = conversion_function(row[`*shadowkey*`, row)]`.
+- `('extra.', 'shadowkey', conversion_function)`, the data will be added to
+  extra in this case, the resulting name is `extra.[shadowkey]`. The
+  `conversion_function` is optional. Logically equivalent to:
+  `event[extra.`*intelmqkey*`] = conversion_function(row[`*shadowkey*`)]`.
 
 Mappings are "straight forward" each mapping is a dict
 of at least three keys:
@@ -23,7 +54,6 @@ of at least three keys:
 The first value is the IntelMQ key,
 the second value is the row in the shadowserver csv.
 
-
 Reference material:
     * when setting the classification.* fields, please use the taxonomy from
       [eCSIRT II](https://www.trusted-introducer.org/Incident-Classification-Taxonomy.pdf)
@@ -40,69 +70,28 @@ TODOs:
     dmth thinks it's not sufficient. Some CERT-Expertise is needed to
     check if the mappings are correct.
 
+    feed_idx is not complete.
+
 """
-import intelmq.lib.harmonization as harmonization
 import re
 
+import intelmq.lib.harmonization as harmonization
 
-def get_feed(feedname, logger):
-    # TODO should this be case insensitive?
-    feed_idx = {
-        "Accessible-Hadoop": accessible_hadoop,
-        "Accessible-Cisco-Smart-Install": accessible_cisco_smart_install,
-        "Accessible-CWMP": accessible_cwmp,
-        "Accessible-RDP": accessible_rdp,
-        "Accessible-SMB": accessible_smb,
-        "Accessible-Telnet": accessible_telnet,
-        "Accessible-VNC": accessible_vnc,
-        "Blacklisted-IP": blacklisted_ip,
-        "Compromised-Website": compromised_website,
-        "DNS-Open-Resolvers": dns_open_resolvers,
-        "Drone-Brute-Force": drone_brute_force,
-        "Drone": drone,
-        "Microsoft-Sinkhole": microsoft_sinkhole,
-        "NTP-Monitor": ntp_monitor,
-        "NTP-Version": ntp_version,
-        "Open-Chargen": open_chargen,
-        "Open-Elasticsearch": open_elasticsearch,
-        "Open-IPMI": open_ipmi,
-        "Open-LDAP": open_ldap,
-        "Open-mDNS": open_mdns,
-        "Open-Memcached": open_memcached,
-        "Open-MongoDB": open_mongodb,
-        "Open-MSSQL": open_mssql,
-        "Open-NATPMP": open_natpmp,
-        "Open-NetBIOS-Nameservice": open_netbios_nameservice,
-        "Open-Netis": open_netis,
-        "Open-Portmapper": open_portmapper,
-        "Open-QOTD": open_qotd,
-        "Open-Redis": open_redis,
-        "Open-SNMP": open_snmp,
-        "Open-SSDP": open_ssdp,
-        "Open-TFTP": open_tftp,
-        "Open-XDMCP": open_xdmcp,
-        "Sandbox-URL": sandbox_url,
-        "Sinkhole-HTTP-Drone": sinkhole_http_drone,
-        "IPv6-Sinkhole-HTTP-Drone": ipv6_sinkhole_http_drone,
-        "Spam-URL": spam_url,
-        "SSL-FREAK-Vulnerable-Servers": ssl_freak_vulnerable_servers,
-        "SSL-POODLE-Vulnerable-Servers": ssl_poodle_vulnerable_servers,
-        "Vulnerable-ISAKMP": vulnerable_isakmp,
-    }
-    old_feed_idx = {
-        "Botnet-Drone-Hadoop": drone,
-        "DNS-open-resolvers": dns_open_resolvers,
-        "Open-NetBIOS": open_netbios_nameservice,
-        "SSL-Freak-Scan": ssl_freak_vulnerable_servers,
-        "SSL-Scan": ssl_poodle_vulnerable_servers,
-    }
 
-    if feedname in old_feed_idx:
-        logger.warning('Deprecated feedname use. Refer to the documentation for the new name. '
-                       'Backwards compatibility will be removed in version 1.3.')
-        return old_feed_idx[feedname]
+def get_feed_by_feedname(given_feedname):
+    for feedname, filename, function in mapping:
+        if given_feedname == feedname:
+            return function
+    else:
+        return None
 
-    return feed_idx.get(feedname)
+
+def get_feed_by_filename(given_filename):
+    for feedname, filename, function in mapping:
+        if given_filename == filename:
+            return feedname, function
+    else:
+        return None
 
 
 def add_UTC_to_timestamp(value):
@@ -110,14 +99,14 @@ def add_UTC_to_timestamp(value):
 
 
 def convert_bool(value):
-    if value.lower() in ('y', 'yes', 'true', 'enabled'):
+    if value.lower() in ('y', 'yes', 'true', 'enabled', '1'):
         return True
-    elif value.lower() in ('n', 'no', 'false', 'disabled'):
+    elif value.lower() in ('n', 'no', 'false', 'disabled', '0'):
         return False
 
 
 def validate_to_none(value):
-    if not len(value) or value in ['0', 'unknown']:
+    if not len(value) or value in ('0', 'unknown'):
         return None
     return value
 
@@ -148,13 +137,12 @@ def convert_http_host_and_url(value, row):
     Sinkhole-HTTP-Drone: http_host, url
     With some reports, url/http_url holds only the path, with others the full HTTP request.
     """
-    hostname = ""
     if "cc_dns" in row:
-        if row['cc_dns']:
-            hostname = row['cc_dns']
+        hostname = row.get('cc_dns', '')
     elif "http_host" in row:
-        if row['http_host']:
-            hostname = row['http_host']
+        hostname = row.get('http_host', '')
+    else:
+        hostname = ''
 
     if "url" in row:
         path = row.get('url', '')
@@ -210,6 +198,68 @@ def validate_fqdn(value):
 def convert_date(value):
     return harmonization.DateTime.sanitize(value)
 
+
+# https://www.shadowserver.org/wiki/pmwiki.php/Services/Open-DB2
+open_db2_discovery_service = {
+    'required_fields': [
+        ('time.source', 'timestamp', add_UTC_to_timestamp),
+        ('source.ip', 'ip'),
+        ('source.port', 'port')
+    ],
+    'optional_fields': [
+        ('protocol.transport', 'protocol'),
+        ('source.reverse_dns', 'hostname'),
+        ('source.asn', 'asn'),
+        ('source.geolocation.cc', 'geo'),
+        ('source.geolocation.region', 'region'),
+        ('source.geolocation.city', 'city'),
+        ('extra.', 'db2_hostname', validate_to_none),
+        ('extra.', 'naics', invalidate_zero),
+        ('extra.', 'sic', invalidate_zero),
+        ('extra.', 'size', convert_int),
+        ('extra.', 'servername', validate_to_none),
+    ],
+    'constant_fields': {
+        'classification.taxonomy': 'vulnerable',
+        'classification.type': 'vulnerable service',
+        'classification.identifier': 'open-db2-discovery-service',
+    }
+}
+
+# https://www.shadowserver.org/wiki/pmwiki.php/Services/Open-HTTP
+accessible_http = {
+    'required_fields': [
+        ('time.source', 'timestamp', add_UTC_to_timestamp),
+        ('source.ip', 'ip'),
+        ('source.port', 'port')
+    ],
+    'optional_fields': [
+        ('protocol.transport', 'protocol'),
+        ('source.reverse_dns', 'hostname'),
+        ('source.asn', 'asn'),
+        ('source.geolocation.cc', 'geo'),
+        ('source.geolocation.region', 'region'),
+        ('source.geolocation.city', 'city'),
+        ('extra.', 'naics', invalidate_zero),
+        ('extra.', 'sic', invalidate_zero),
+        ('extra.', 'http', validate_to_none),
+        ('extra.', 'http_code', convert_int),
+        ('extra.', 'http_reason', validate_to_none),
+        ('extra.', 'content_type', validate_to_none),
+        ('extra.', 'connection', validate_to_none),
+        ('extra.', 'www_authenticate', validate_to_none),
+        ('extra.', 'set_cookie', validate_to_none),
+        ('extra.', 'server', validate_to_none),
+        ('extra.', 'content_length', invalidate_zero),
+        ('extra.', 'transfer_encoding', validate_to_none),
+        ('extra.', 'http_date', convert_date),
+    ],
+    'constant_fields': {
+        'classification.taxonomy': 'other',
+        'classification.type': 'other',
+        'classification.identifier': 'accessible-http',
+    }
+}
 
 # https://www.shadowserver.org/wiki/pmwiki.php/Services/Open-mDNS
 open_mdns = {
@@ -348,7 +398,7 @@ sinkhole_http_drone = {
     ],
     'constant_fields': {
         'classification.taxonomy': 'malicious code',
-        'classification.type': 'infected system',
+        'classification.type': 'infected-system',
         # classification.identifier will be set to (harmonized) malware name by modify expert
         # The feed does not include explicit information on the protocol
         # but since it is about HTTP the protocol is always set to 'tcp'.
@@ -390,7 +440,7 @@ ipv6_sinkhole_http_drone = {
     ],
     'constant_fields': {
         'classification.taxonomy': 'malicious code',
-        'classification.type': 'infected system',
+        'classification.type': 'infected-system',
         # classification.identifier will be set to (harmonized) malware name by modify expert
         # The feed does not include explicit information on the protocol
         # but since it is about HTTP the protocol is always set to 'tcp'.
@@ -410,13 +460,13 @@ microsoft_sinkhole = {
         ('source.geolocation.cc', 'geo'),
         ('destination.url', 'url', convert_http_host_and_url, True),
         ('malware.name', 'type'),
-        ('user_agent', 'http_agent'),
         ('source.tor_node', 'tor', set_tor_node),
         ('os.name', 'p0f_genre'),
         ('os.version', 'p0f_detail'),
         ('source.reverse_dns', 'hostname'),
         ('destination.port', 'dst_port'),
         ('destination.fqdn', 'http_host', validate_fqdn),
+        ('extra.', 'http_agent', validate_to_none),
         ('extra.', 'http_referer', validate_to_none),
         ('extra.', 'http_referer_ip', validate_ip),
         ('extra.', 'http_referer_asn', convert_int),
@@ -435,7 +485,7 @@ microsoft_sinkhole = {
     ],
     'constant_fields': {
         'classification.taxonomy': 'malicious code',
-        'classification.type': 'infected system',
+        'classification.type': 'infected-system',
         # classification.identifier will be set to (harmonized) malware name by modify expert
         'protocol.transport': 'tcp',
         'protocol.application': 'http',
@@ -804,7 +854,7 @@ dns_open_resolvers = {
         ('source.geolocation.city', 'city'),
         ('protocol.transport', 'protocol'),
         ('source.reverse_dns', 'hostname'),
-        # ('classification.identifier', 'tag'),  # always set to 'openresolver' in constant_fields
+        # ('classification.identifier', 'tag'),  # always set to 'dns-open-resolver' in constant_fields
         ('extra.', 'min_amplification', convert_float),
         ('extra.', 'dns_version', validate_to_none),
         ('os.name', 'p0f_genre'),
@@ -947,7 +997,7 @@ ssl_poodle_vulnerable_servers = {
         ('source.geolocation.cc', 'geo'),
         ('source.geolocation.region', 'region'),
         ('source.geolocation.city', 'city'),
-        ('extra.', 'cipher_suite', convert_bool),
+        ('extra.', 'cipher_suite', validate_to_none),
         ('extra.', 'ssl_poodle', convert_bool),
         ('extra.', 'cert_length', validate_to_none),
         ('extra.', 'subject_common_name', validate_to_none),
@@ -1006,6 +1056,8 @@ ssl_poodle_vulnerable_servers = {
         ('extra.', 'browser_trusted', convert_bool),
         ('extra.', 'validation_level', validate_to_none),
         ('extra.', 'browser_error', validate_to_none),
+        ('extra.', 'tlsv13_support', validate_to_none),
+        ('extra.', 'tlsv13_cipher', validate_to_none),
     ],
     'constant_fields': {
         'classification.taxonomy': 'vulnerable',
@@ -1049,7 +1101,7 @@ open_memcached = {
     },
 }
 
-# https://www.shadowserver.org/wiki/pmwiki.php/Services/Botnet-Drone-Hadoop
+# https://www.shadowserver.org/what-we-do/network-reporting/drone-botnet-drone-report/
 drone = {
     'required_fields': [
         ('time.source', 'timestamp', add_UTC_to_timestamp),
@@ -1091,8 +1143,53 @@ drone = {
     ],
     'constant_fields': {
         'classification.taxonomy': 'malicious code',
-        'classification.type': 'infected system',
+        'classification.type': 'infected-system',
         # classification.identifier will be set to (harmonized) malware name by modify expert
+    },
+}
+drone_spam = {
+    'required_fields': [
+        ('time.source', 'timestamp', add_UTC_to_timestamp),
+        ('source.ip', 'ip'),
+        ('source.port', 'port'),
+    ],
+    'optional_fields': [
+        ('source.asn', 'asn'),
+        ('source.geolocation.cc', 'geo'),
+        ('source.geolocation.region', 'region'),
+        ('source.geolocation.city', 'city'),
+        ('source.fqdn', 'hostname'),
+        ('protocol.transport', 'type'),
+        (False, 'infection'),  # is just 'spam'
+        ('source.url', 'url', convert_http_host_and_url, True),
+        ('user_agent', 'agent'),
+        ('destination.ip', 'cc_ip', validate_ip),
+        ('destination.port', 'cc_port'),
+        ('destination.asn', 'cc_asn'),
+        ('destination.geolocation.cc', 'cc_geo'),
+        ('destination.fqdn', 'cc_dns', validate_fqdn),
+        ('connection_count', 'count', convert_int),
+        ('extra.', 'proxy', convert_bool),
+        ('protocol.application', 'application'),
+        ('os.name', 'p0f_genre'),
+        ('os.version', 'p0f_detail'),
+        ('extra.', 'machine_name', validate_to_none),
+        ('extra.', 'id', validate_to_none),
+        ('extra.', 'naics', invalidate_zero),
+        ('extra.', 'sic', invalidate_zero),
+        ('extra.destination.naics', 'cc_naics', invalidate_zero),
+        ('extra.destination.sic', 'cc_sic', invalidate_zero),
+        ('extra.destination.sector', 'cc_sector', validate_to_none),
+        ('extra.', 'sector', validate_to_none),
+        ('extra.', 'ssl_cipher', validate_to_none),
+        ('extra.', 'family', validate_to_none),
+        ('extra.', 'tag', validate_to_none),
+        ('extra.', 'public_source', validate_to_none),
+    ],
+    'constant_fields': {
+        'classification.taxonomy': 'abusive content',
+        'classification.type': 'spam',
+        'classification.identifier': 'spam',
     },
 }
 
@@ -1312,8 +1409,6 @@ spam_url = {
         ('extra.', 'sender', validate_to_none),
         ('extra.', 'naics', invalidate_zero),
         ('extra.', 'sic', invalidate_zero),
-        ('extra.', 'src_naics', invalidate_zero),
-        ('extra.', 'src_sic', invalidate_zero),
     ],
     'constant_fields': {
         'classification.taxonomy': 'abusive content',
@@ -1503,6 +1598,7 @@ blacklisted_ip = {
     }
 }
 
+# https://www.shadowserver.org/wiki/pmwiki.php/Services/Accessible-Telnet
 accessible_telnet = {
     'required_fields': [
         ('time.source', 'timestamp', add_UTC_to_timestamp),
@@ -1529,6 +1625,7 @@ accessible_telnet = {
     }
 }
 
+# https://www.shadowserver.org/wiki/pmwiki.php/Services/Open-CWMP
 accessible_cwmp = {
     'required_fields': [
         ('time.source', 'timestamp', add_UTC_to_timestamp),
@@ -1565,6 +1662,7 @@ accessible_cwmp = {
     }
 }
 
+# https://www.shadowserver.org/wiki/pmwiki.php/Services/Accessible-VNC
 accessible_vnc = {
     'required_fields': [
         ('time.source', 'timestamp', add_UTC_to_timestamp),
@@ -1591,6 +1689,7 @@ accessible_vnc = {
     }
 }
 
+# https://www.shadowserver.org/wiki/pmwiki.php/Services/Accessible-CiscoSmartInstall
 accessible_cisco_smart_install = {
     'required_fields': [
         ('time.source', 'timestamp', add_UTC_to_timestamp),
@@ -1690,3 +1789,441 @@ accessible_hadoop = {
         'classification.identifier': 'accessible-hadoop',
     }
 }
+
+# https://www.shadowserver.org/wiki/pmwiki.php/Services/Accessible-ADB
+accessible_adb = {
+    'required_fields': [
+        ('time.source', 'timestamp', add_UTC_to_timestamp),
+        ('source.ip', 'ip'),
+        ('source.port', 'port'),
+    ],
+    'optional_fields': [
+        ('protocol.transport', 'protocol'),
+        ('source.reverse_dns', 'hostname'),
+        # ('classification.identifier', 'tag'),  # always set to 'accessible-adb' in constant_fields
+        ('source.asn', 'asn'),
+        ('source.geolocation.cc', 'geo'),
+        ('source.geolocation.region', 'region'),
+        ('source.geolocation.city', 'city'),
+        ('extra.', 'naics', invalidate_zero),
+        ('extra.', 'sic', invalidate_zero),
+        ('extra.', 'name', validate_to_none),
+        ('extra.', 'model', validate_to_none),
+        ('extra.', 'device', validate_to_none),
+        ('extra.', 'features', validate_to_none),
+    ],
+    'constant_fields': {
+        'classification.taxonomy': 'vulnerable',
+        'classification.type': 'vulnerable service',
+        'classification.identifier': 'accessible-adb',
+        'protocol.application': 'adb',
+    },
+}
+
+# https://www.shadowserver.org/wiki/pmwiki.php/Services/Outdated-DNSSEC-Key
+# https://www.shadowserver.org/wiki/pmwiki.php/Services/Outdated-DNSSEC-Key-IPv6
+outdated_dnssec_key = {
+    'required_fields': [
+        ('time.source', 'timestamp', add_UTC_to_timestamp),
+        ('source.ip', 'ip'),
+    ],
+    'optional_fields': [
+        ('source.asn', 'asn'),
+        ('source.geolocation.cc', 'geo'),
+        ('source.geolocation.region', 'region'),
+        ('source.geolocation.city', 'city'),
+        ('source.reverse_dns', 'hostname'),
+        ('destination.ip', 'dst_ip', validate_ip),
+        ('destination.port', 'dst_port', convert_int),
+        ('destination.asn', 'dst_asn', convert_int),
+        ('destination.geolocation.cc', 'dst_geo'),
+        ('extra.', 'naics', invalidate_zero),
+        ('extra.', 'sic', invalidate_zero),
+        ('extra.destination.naics', 'dst_naics', invalidate_zero),
+        ('extra.destination.sic', 'dst_sic', invalidate_zero),
+        ('extra.', 'sector', validate_to_none),
+        ('extra.destination.sector', 'dst_sector', validate_to_none),
+        # ('classification.identifier', 'tag'),  # always set to 'outdated-dnssec-key' in constant_fields
+        ('extra.', 'public_source', validate_to_none),
+        ('protocol.transport', 'protocol'),
+    ],
+    'constant_fields': {
+        'protocol.application': 'dns',
+        'classification.taxonomy': 'availability',
+        'classification.type': 'other',  # change to "misconfiguration" when available
+        'classification.identifier': 'outdated-dnssec-key',
+    }
+}
+
+# https://www.shadowserver.org/wiki/pmwiki.php/Services/Accessible-rsync
+accessible_rsync = {
+    'required_fields': [
+        ('time.source', 'timestamp', add_UTC_to_timestamp),
+        ('source.ip', 'ip'),
+        ('source.port', 'port'),
+    ],
+    'optional_fields': [
+        ('protocol.transport', 'protocol'),
+        ('source.reverse_dns', 'hostname'),
+        # ('classification.identifier', 'tag'),  # always set to 'accessible-rsync' in constant_fields
+        ('source.asn', 'asn'),
+        ('source.geolocation.cc', 'geo'),
+        ('source.geolocation.region', 'region'),
+        ('source.geolocation.city', 'city'),
+        ('extra.', 'naics', invalidate_zero),
+        ('extra.', 'sic', invalidate_zero),
+        ('extra.', 'module', validate_to_none),
+        ('extra.', 'motd', validate_to_none),
+        ('extra.', 'password', convert_bool),
+    ],
+    'constant_fields': {
+        'classification.taxonomy': 'vulnerable',
+        'classification.type': 'vulnerable service',
+        'classification.identifier': 'accessible-rsync',
+        'protocol.application': 'rsync',
+    },
+}
+
+# https://www.shadowserver.org/wiki/pmwiki.php/Services/Accessible-AFP
+accessible_afp = {
+    'required_fields': [
+        ('time.source', 'timestamp', add_UTC_to_timestamp),
+        ('source.ip', 'ip'),
+        ('source.port', 'port'),
+    ],
+    'optional_fields': [
+        ('protocol.transport', 'protocol'),
+        ('source.reverse_dns', 'hostname'),
+        # ('classification.identifier', 'tag'),  # always set to 'accessible-afp' in constant_fields
+        ('source.asn', 'asn'),
+        ('source.geolocation.cc', 'geo'),
+        ('source.geolocation.region', 'region'),
+        ('source.geolocation.city', 'city'),
+        ('extra.', 'naics', invalidate_zero),
+        ('extra.', 'sic', invalidate_zero),
+        ('extra.', 'machine_type', validate_to_none),
+        ('extra.', 'afp_versions', validate_to_none),
+        ('extra.', 'uams', validate_to_none),
+        ('extra.', 'flags', validate_to_none),
+        ('extra.', 'server_name', validate_to_none),
+        ('extra.', 'signature', validate_to_none),
+        ('extra.', 'directory_service', validate_to_none),
+        ('extra.', 'utf8_servername', validate_to_none),
+        ('extra.', 'network_address', validate_to_none),
+    ],
+    'constant_fields': {
+        'classification.taxonomy': 'vulnerable',
+        'classification.type': 'vulnerable service',
+        'classification.identifier': 'accessible-afp',
+        'protocol.application': 'afp',
+    },
+}
+
+# https://www.shadowserver.org/wiki/pmwiki.php/Services/Darknet
+darknet = {
+    'required_fields': [
+        ('time.source', 'timestamp', add_UTC_to_timestamp),
+        ('source.ip', 'ip'),
+    ],
+    'optional_fields': [
+        ('source.port', 'port'),
+        ('source.asn', 'asn'),
+        ('source.geolocation.cc', 'geo'),
+        ('source.geolocation.region', 'region'),
+        ('source.geolocation.city', 'city'),
+        ('source.reverse_dns', 'hostname'),
+        ('extra.', 'type', validate_to_none),
+        ('destination.ip', 'dst_ip', validate_ip),
+        ('destination.port', 'dst_port', convert_int),
+        ('destination.asn', 'dst_asn', convert_int),
+        ('destination.geolocation.cc', 'dst_geo'),
+        ('extra.', 'count', convert_int),
+        ('extra.', 'naics', invalidate_zero),
+        ('extra.', 'sic', invalidate_zero),
+        ('extra.destination.naics', 'dst_naics', invalidate_zero),
+        ('extra.destination.sic', 'dst_sic', invalidate_zero),
+        ('extra.', 'sector', validate_to_none),
+        ('extra.destination.sector', 'dst_sector', validate_to_none),
+        ('extra.', 'family', validate_to_none),
+        ('classification.identifier', 'tag'),  # different values possible in this report
+        ('extra.', 'public_source', validate_to_none),
+    ],
+    'constant_fields': {
+        'classification.taxonomy': 'other',
+        'classification.type': 'other',
+    },
+}
+
+# https://www.shadowserver.org/wiki/pmwiki.php/Services/Amplification-DDoS-Victim
+amplification_ddos_victim = {
+    'required_fields': [
+        ('time.source', 'timestamp', add_UTC_to_timestamp),
+        ('source.ip', 'ip'),
+    ],
+    'optional_fields': [
+        ('source.port', 'src_port'),
+        ('protocol.transport', 'protocol'),
+        ('destination.port', 'dst_port'),
+        ('source.reverse_dns', 'hostname'),
+        ('source.asn', 'asn'),
+        ('source.geolocation.cc', 'geo'),
+        ('source.geolocation.region', 'region'),
+        ('source.geolocation.city', 'city'),
+        ('extra.', 'tag', validate_to_none),
+        ('extra.', 'naics', invalidate_zero),
+        ('extra.', 'sic', invalidate_zero),
+        ('extra.', 'request', validate_to_none),
+        ('extra.', 'count', convert_int),
+        ('extra.', 'bytes', convert_int),
+        ('extra.', 'sensor_geo', validate_to_none),
+        ('extra.', 'sector', validate_to_none),
+        ('extra.', 'end_time', validate_to_none),
+        ('extra.', 'public_source', validate_to_none),
+    ],
+    'constant_fields': {
+        'classification.taxonomy': 'availability',
+        'classification.type': 'ddos',
+        'classification.identifier': 'amplification-ddos-victim',
+    }
+}
+
+# https://www.shadowserver.org/wiki/pmwiki.php/Services/HTTP-Scanners
+http_scanners = {
+    'required_fields': [
+        ('time.source', 'timestamp', add_UTC_to_timestamp),
+        ('source.ip', 'ip'),
+        ('source.port', 'port'),
+    ],
+    'optional_fields': [
+        ('source.asn', 'asn'),
+        ('source.geolocation.cc', 'geo'),
+        ('source.geolocation.region', 'region'),
+        ('source.geolocation.city', 'city'),
+        ('source.reverse_dns', 'hostname'),
+        ('destination.ip', 'dst_ip'),
+        ('destination.port', 'dst_port'),
+        ('destination.asn', 'dst_asn'),
+        ('destination.geolocation.cc', 'dst_geo'),
+        ('destination.fqdn', 'dst_dns', validate_fqdn),
+        ('extra.', 'type', validate_to_none),
+        ('extra.', 'naics', invalidate_zero),
+        ('extra.', 'sic', invalidate_zero),
+        ('extra.', 'sector', validate_to_none),
+        ('extra.destination.sector', 'dst_sector', validate_to_none),
+        ('extra.', 'public_source', validate_to_none),
+        ('extra.', 'sensorid', validate_to_none),
+        ('extra.', 'pattern', validate_to_none),
+        ('extra.', 'url', validate_to_none),
+        ('extra.file.md5', 'file_md5', validate_to_none),
+        ('extra.file.sha256', 'file_sha256', validate_to_none),
+        ('extra.', 'request_raw', validate_to_none),
+    ],
+    'constant_fields': {
+        'classification.taxonomy': 'information gathering',
+        'classification.type': 'scanner',
+        'classification.identifier': 'http',
+        'protocol.application': 'http',
+        'protocol.transport': 'tcp',
+    }
+}
+
+# https://www.shadowserver.org/wiki/pmwiki.php/Services/ICS-Scanners
+ics_scanners = {
+    'required_fields': [
+        ('time.source', 'timestamp', add_UTC_to_timestamp),
+        ('source.ip', 'ip'),
+        ('source.port', 'port'),
+    ],
+    'optional_fields': [
+        ('source.asn', 'asn'),
+        ('source.geolocation.cc', 'geo'),
+        ('source.geolocation.region', 'region'),
+        ('source.geolocation.city', 'city'),
+        ('source.reverse_dns', 'hostname'),
+        ('protocol.application', 'protocol'),
+        ('destination.ip', 'dst_ip'),
+        ('destination.port', 'dst_port'),
+        ('destination.asn', 'dst_asn'),
+        ('destination.geolocation.cc', 'dst_geo'),
+        ('destination.fqdn', 'dst_dns', validate_fqdn),
+        ('extra.', 'type', validate_to_none),
+        ('extra.', 'naics', invalidate_zero),
+        ('extra.', 'sic', invalidate_zero),
+        ('extra.', 'sector', validate_to_none),
+        ('extra.destination.sector', 'dst_sector', validate_to_none),
+        ('extra.', 'public_source', validate_to_none),
+        ('extra.', 'sensorid', validate_to_none),
+        ('extra.', 'state', validate_to_none),
+        ('extra.', 'slave_id', validate_to_none),
+        ('extra.', 'function_code', convert_int),
+        ('extra.', 'request', validate_to_none),
+        ('extra.', 'response', convert_int),
+    ],
+    'constant_fields': {
+        'classification.taxonomy': 'information gathering',
+        'classification.type': 'scanner',
+        'classification.identifier': 'ics',
+    }
+}
+
+# https://www.shadowserver.org/wiki/pmwiki.php/Services/Open-Ubiquiti
+accessible_ubiquiti_discovery_service = {
+    'required_fields': [
+        ('time.source', 'timestamp', add_UTC_to_timestamp),
+        ('source.ip', 'ip'),
+        ('source.port', 'port'),
+    ],
+    'optional_fields': [
+        ('protocol.transport', 'protocol'),
+        ('source.reverse_dns', 'hostname'),
+        # ('classification.identifier', 'tag'),  # always set to 'accessible-ubiquiti-discovery-service' in constant_fields
+        ('source.asn', 'asn'),
+        ('source.geolocation.cc', 'geo'),
+        ('source.geolocation.region', 'region'),
+        ('source.geolocation.city', 'city'),
+        ('extra.', 'naics', invalidate_zero),
+        ('extra.', 'sic', invalidate_zero),
+        ('extra.mac_address', 'mac', validate_to_none),
+        ('extra.radio_name', 'radioname', validate_to_none),
+        ('extra.', 'essid', validate_to_none),
+        ('extra.model', 'modelshort', validate_to_none),
+        ('extra.model_full', 'modelfull', validate_to_none),
+        ('extra.firmwarerev', 'firmware', validate_to_none),
+        ('extra.response_size', 'size', convert_int),
+    ],
+    'constant_fields': {
+        'classification.taxonomy': 'vulnerable',
+        'classification.type': 'vulnerable service',
+        'classification.identifier': 'accessible-ubiquiti-discovery-service',
+    }
+}
+
+# https://www.shadowserver.org/wiki/pmwiki.php/Services/Accessible-FTP
+accessible_ftp = {
+    'required_fields': [
+        ('time.source', 'timestamp', add_UTC_to_timestamp),
+        ('source.ip', 'ip'),
+        ('source.port', 'port'),
+    ],
+    'optional_fields': [
+        ('protocol.transport', 'protocol'),
+        ('source.reverse_dns', 'hostname'),
+        # ('classification.identifier', 'tag'),  # always set to 'accessible-ftp' in constant_fields
+        ('source.asn', 'asn'),
+        ('source.geolocation.cc', 'geo'),
+        ('source.geolocation.region', 'region'),
+        ('source.geolocation.city', 'city'),
+        ('extra.', 'naics', invalidate_zero),
+        ('extra.', 'sic', invalidate_zero),
+        ('extra.', 'banner', validate_to_none),
+        ('extra.', 'handshake', validate_to_none),
+        ('extra.', 'cipher_suite', validate_to_none),
+        ('extra.', 'cert_length', convert_int),
+        ('extra.', 'subject_common_name', validate_to_none),
+        ('extra.', 'issuer_common_name', validate_to_none),
+        ('extra.', 'cert_issue_date', validate_to_none),
+        ('extra.', 'cert_expiration_date', validate_to_none),
+        ('extra.', 'sha1_fingerprint', validate_to_none),
+        ('extra.', 'cert_serial_number', validate_to_none),
+        ('extra.', 'ssl_version', validate_to_none),
+        ('extra.', 'signature_algorithm', validate_to_none),
+        ('extra.', 'key_algorithm', validate_to_none),
+        ('extra.', 'subject_organization_name', validate_to_none),
+        ('extra.', 'subject_organization_unit_name', validate_to_none),
+        ('extra.', 'subject_country', validate_to_none),
+        ('extra.', 'subject_state_or_province_name', validate_to_none),
+        ('extra.', 'subject_locality_name', validate_to_none),
+        ('extra.', 'subject_street_address', validate_to_none),
+        ('extra.', 'subject_postal_code', validate_to_none),
+        ('extra.', 'subject_surname', validate_to_none),
+        ('extra.', 'subject_given_name', validate_to_none),
+        ('extra.', 'subject_email_address', validate_to_none),
+        ('extra.', 'subject_business_category', validate_to_none),
+        ('extra.', 'subject_serial_number', validate_to_none),
+        ('extra.', 'issuer_organization_name', validate_to_none),
+        ('extra.', 'issuer_organization_unit_name', validate_to_none),
+        ('extra.', 'issuer_country', validate_to_none),
+        ('extra.', 'issuer_state_or_province_name', validate_to_none),
+        ('extra.', 'issuer_locality_name', validate_to_none),
+        ('extra.', 'issuer_street_address', validate_to_none),
+        ('extra.', 'issuer_postal_code', validate_to_none),
+        ('extra.', 'issuer_surname', validate_to_none),
+        ('extra.', 'issuer_given_name', validate_to_none),
+        ('extra.', 'issuer_email_address', validate_to_none),
+        ('extra.', 'issuer_business_category', validate_to_none),
+        ('extra.', 'issuer_serial_number', validate_to_none),
+        ('extra.', 'sha256_fingerprint', validate_to_none),
+        ('extra.', 'sha512_fingerprint', validate_to_none),
+        ('extra.', 'md5_fingerprint', validate_to_none),
+        ('extra.', 'cert_valid', convert_bool),
+        ('extra.', 'self_signed', convert_bool),
+        ('extra.', 'cert_expired', convert_bool),
+        ('extra.', 'validation_level', validate_to_none),
+        ('extra.', 'auth_tls_response', validate_to_none),
+        ('extra.', 'auth_ssl_response', validate_to_none)
+    ],
+    'constant_fields': {
+        'classification.taxonomy': 'vulnerable',
+        'classification.type': 'vulnerable service',
+        'classification.identifier': 'accessible-ftp',
+        'protocol.application': 'ftp',
+    }
+}
+
+mapping = (
+    # feed name, file name, function
+    ('Accessible-ADB', 'scan_adb', accessible_adb),
+    ('Accessible-AFP', 'scan_afp', accessible_afp),
+    ('Accessible-CWMP', 'scan_cwmp', accessible_cwmp),
+    ('Accessible-Cisco-Smart-Install', 'cisco_smart_install', accessible_cisco_smart_install),
+    ('Accessible-FTP', 'scan_ftp', accessible_ftp),
+    ('Accessible-HTTP', 'scan_http', accessible_http),
+    ('Accessible-Hadoop', 'scan_hadoop', accessible_hadoop),
+    ('Accessible-RDP', 'scan_rdp', accessible_rdp),
+    ('Accessible-Rsync', 'scan_rsync', accessible_rsync),
+    ('Accessible-SMB', 'scan_smb', accessible_smb),
+    ('Accessible-Telnet', 'scan_telnet', accessible_telnet),
+    ('Accessible-Ubiquiti-Discovery-Service', 'scan_ubiquiti', accessible_ubiquiti_discovery_service),
+    ('Accessible-VNC', 'scan_vnc', accessible_vnc),
+    ('Amplification-DDoS-Victim', 'ddos_amplification', amplification_ddos_victim),
+    ('Blacklisted-IP', 'blacklist', blacklisted_ip),
+    ('Compromised-Website', 'compromised_website', compromised_website),
+    ('DNS-Open-Resolvers', 'scan_dns', dns_open_resolvers),
+    ('Darknet', 'darknet', darknet),
+    ('Drone', 'botnet_drone', drone),
+    ('Drone-Brute-Force', 'drone_brute_force', drone_brute_force),
+    ('HTTP-Scanners', 'hp_http_scan', http_scanners),
+    ('ICS-Scanners', 'hp_ics_scan', ics_scanners),
+    ('IPv6-Sinkhole-HTTP-Drone', 'sinkhole6_http', ipv6_sinkhole_http_drone),
+    ('Microsoft-Sinkhole', 'microsoft_sinkhole', microsoft_sinkhole),
+    ('NTP-Monitor', 'scan_ntpmonitor', ntp_monitor),
+    ('NTP-Version', 'scan_ntp', ntp_version),
+    ('Open-Chargen', 'scan_chargen', open_chargen),
+    ('Open-DB2-Discovery-Service', 'scan_db2', open_db2_discovery_service),
+    ('Open-Elasticsearch', 'scan_elasticsearch', open_elasticsearch),
+    ('Open-IPMI', 'scan_ipmi', open_ipmi),
+    ('Open-LDAP', 'scan_ldap', open_ldap),
+    ('Open-LDAP-TCP', 'scan_ldap_tcp', open_ldap),
+    ('Open-MSSQL', 'scan_mssql', open_mssql),
+    ('Open-Memcached', 'scan_memcached', open_memcached),
+    ('Open-MongoDB', 'scan_mongodb', open_mongodb),
+    ('Open-NATPMP', 'scan_nat_pmp', open_natpmp),
+    ('Open-NetBIOS-Nameservice', 'scan_netbios', open_netbios_nameservice),
+    ('Open-Netis', 'netis_router', open_netis),
+    ('Open-Portmapper', 'scan_portmapper', open_portmapper),
+    ('Open-QOTD', 'scan_qotd', open_qotd),
+    ('Open-Redis', 'scan_redis', open_redis),
+    ('Open-SNMP', 'scan_snmp', open_snmp),
+    ('Open-SSDP', 'scan_ssdp', open_ssdp),
+    ('Open-TFTP', 'scan_tftp', open_tftp),
+    ('Open-XDMCP', 'scan_xdmcp', open_xdmcp),
+    ('Open-mDNS', 'scan_mdns', open_mdns),
+    ('Outdated-DNSSEC-Key', 'outdated_dnssec_key', outdated_dnssec_key),
+    ('Outdated-DNSSEC-Key-IPv6', 'outdated_dnssec_key_v6', outdated_dnssec_key),
+    ('SSL-FREAK-Vulnerable-Servers', 'scan_ssl_freak', ssl_freak_vulnerable_servers),
+    ('SSL-POODLE-Vulnerable-Servers', 'scan_ssl_poodle', ssl_poodle_vulnerable_servers),
+    ('Sandbox-URL', 'cwsandbox_url', sandbox_url),
+    ('Sinkhole-HTTP-Drone', 'sinkhole_http_drone', sinkhole_http_drone),
+    ('Spam-URL', 'spam_url', spam_url),
+    ('Vulnerable-ISAKMP', 'scan_isakmp', vulnerable_isakmp),
+)

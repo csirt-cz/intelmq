@@ -62,10 +62,12 @@ class TestConf(unittest.TestCase):
         # Check Json syntax and style
         self.assertEqual(to_json(interpreted), fcontent)
 
-        # check if everything from report is in event and equal, except raw-description
+        # check if everything from report is in event and equal, except raw's and extra's description
         del interpreted['report']['raw']['description']
+        del interpreted['report']['extra']['description']
         event_copy = interpreted['event'].copy()
         del event_copy['raw']['description']
+        del event_copy['extra']['description']
         self.assertDictContainsSubset(interpreted['report'], event_copy)
 
         # check for valid regex, length and type
@@ -117,7 +119,7 @@ class TestConf(unittest.TestCase):
 
         interpreted = json.loads(fcontent,
                                  object_pairs_hook=collections.OrderedDict)
-        modules = set(['intelmq.bots.collectors.n6.collector_stomp'])
+        modules = set()
 
         for groupname, group in interpreted.items():
             for bot_name, bot_config in group.items():
@@ -126,11 +128,17 @@ class TestConf(unittest.TestCase):
         for _, groupname, _ in pkgutil.iter_modules(path=intelmq.bots.__path__):
             group = importlib.import_module('intelmq.bots.%s' % groupname)
             for _, providername, _ in pkgutil.iter_modules(path=group.__path__):
-                provider = importlib.import_module('intelmq.bots.%s.%s' % (groupname, providername))
+                modulename = 'intelmq.bots.%s.%s' % (groupname, providername)
+                provider = importlib.import_module(modulename)
                 for _, botname, _ in pkgutil.iter_modules(path=provider.__path__):
                     classname = 'intelmq.bots.%s.%s.%s' % (groupname, providername, botname)
-                    if classname not in modules and '_' in botname:
-                        raise ValueError("Bot %r not found in BOTS file." % classname)
+                    self.assertFalse(classname not in modules and '_' in botname,
+                                    msg="Bot %r not found in BOTS file." % classname)
+
+        for module in modules:
+            bot = importlib.import_module(module)
+            self.assertTrue(hasattr(bot, 'BOT'),
+                            msg='Module %r has no variable BOT.' % module)
 
 
 class CerberusTests(unittest.TestCase):
@@ -143,20 +151,20 @@ class CerberusTests(unittest.TestCase):
 
         v = cerberus.Validator(schema)
 
-        if not v.validate(bots):
-            raise ValueError('Invalid BOTS file:\n%s' % pprint.pformat(v.errors))
+        self.assertTrue(v.validate(bots),
+                        msg='Invalid BOTS file:\n%s' % pprint.pformat(v.errors))
 
     def test_feeds(self):
         with open(os.path.join(os.path.dirname(__file__), 'assets/feeds.schema.json')) as handle:
             schema = json.load(handle)
         with open(pkg_resources.resource_filename('intelmq',
                                                   'etc/feeds.yaml')) as handle:
-            feeds = yaml.load(handle)
+            feeds = yaml.safe_load(handle)
 
         v = cerberus.Validator(schema)
 
-        if not v.validate(feeds):
-            raise ValueError('Invalid feeds.yaml file:\n%s' % pprint.pformat(v.errors))
+        self.assertTrue(v.validate(feeds),
+                        msg='Invalid feeds.yaml file:\n%s' % pprint.pformat(v.errors))
 
 
 

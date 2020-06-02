@@ -3,35 +3,33 @@
 For installation instructions, see [INSTALL.md](INSTALL.md).
 For upgrade instructions, see [UPGRADING.md](UPGRADING.md).
 
-  * [Where to get help?](#help)
-  * [Configure services](#configure-services)
-  * [Configuration](#configuration)
-    * [System Configuration](#system-configuration-defaults)
-        * [Error Handling](#error-handling)
-        * [Miscellaneous](#miscellaneous)
-    * [Pipeline Configuration](#pipeline-configuration)
-    * [Runtime Configuration](#runtime-configuration)
-    * [Harmonization Configuration](#harmonization-configuration)
-  * [Utilities](#utilities)
-    * [Management](#management)
-      * [Web interface: IntelMQ Manager](#web-interface-intelmq-manager)
-      * [Command-line interface: intelmqctl](#command-line-interface-intelmqctl)
-        * [Botnet Concept](#botnet-concept)
-        * [Scheduled run mode](#scheduled-run-mode)
-        * [Continuous run mode](#continuous-run-mode)
-        * [Forcing reset pipeline and cache (be careful)](#forcing-reset-pipeline-and-cache-be-careful)
-    * [Error Handling](#error-handling-1)
-      * [Tool: intelmqdump](#tool-intelmqdump)
-    * [Monitoring Logs](#monitoring-logs)
-  * [Upgrade](#upgrade)
-    * [Stop IntelMQ and Backup](#stop-intelmq-and-backup)
-    * [Upgrade](#upgrade-1)
-    * [Restore Configurations](#restore-configurations)
-  * [Uninstall](#uninstall)
-  * [Integration with ticket systems, etc.](#integration-with-ticket-systems-etc)
-  * [Frequently Asked Questions](#frequently-asked-questions)
-  * [Additional Information](#additional-information)
-    * [Performance Tests](#performance-tests)
+**Table of Contents:**
+- [Where to get help?](#where-to-get-help)
+- [Configure services](#configure-services)
+- [Configuration](#configuration)
+- [System Configuration (defaults)](#system-configuration-defaults)
+    - [Error Handling](#error-handling)
+    - [Miscellaneous](#miscellaneous)
+- [Pipeline Configuration](#pipeline-configuration)
+- [Runtime Configuration](#runtime-configuration)
+- [Harmonization Configuration](#harmonization-configuration)
+- [Utilities](#utilities)
+- [Management](#management)
+  - [Web interface: IntelMQ Manager](#web-interface-intelmq-manager)
+  - [Command-line interface: intelmqctl](#command-line-interface-intelmqctl)
+    - [Botnet Concept](#botnet-concept)
+    - [Scheduled Run Mode](#scheduled-run-mode)
+    - [Continuous Run Mode](#continuous-run-mode)
+    - [Reloading](#reloading)
+    - [Forcing reset pipeline and cache (be careful)](#forcing-reset-pipeline-and-cache-be-careful)
+- [Error Handling](#error-handling)
+  - [Tool: intelmqdump](#tool-intelmqdump)
+- [Monitoring Logs](#monitoring-logs)
+- [Uninstall](#uninstall)
+- [Integration with ticket systems, etc.](#integration-with-ticket-systems-etc)
+- [Frequently Asked Questions](#frequently-asked-questions)
+- [Additional Information](#additional-information)
+  - [Bash Completion](#bash-completion)
 
 # Where to get help?
 
@@ -49,8 +47,18 @@ systemctl start redis.service
 
 # Configuration
 
-Note: If you installed the packages, LSB paths are used instead of `/opt/intelmq`.
-Otherwise, the configuration directory is `/opt/intelmq/etc/`. All files are JSON. By
+## /opt and LSB paths
+
+If you installed the packages, LSB paths are used instead of `/opt/intelmq`.
+Otherwise, the configuration directory is `/opt/intelmq/etc/`.
+
+You can switch this by setting the environment variables `INTELMQ_PATHS_NO_OPT` and `INTELMQ_PATHS_OPT`, respectively.
+* When installing the Python packages, you can set `INTELMQ_PATHS_NO_OPT` to something non-empty to use LSB-paths.
+* When installing the deb/rpm packages, you can set `INTELMQ_PATHS_OPT` to something non-empty to use `/opt/` paths.
+
+## Overview
+
+All files are JSON. By
 default, the installation method puts its distributed configuration files into
 `etc/examples`, so it does not overwrite your local configuration. Prior to the
 first run, copy them to `etc`:
@@ -100,7 +108,7 @@ You can set these parameters per bot as well. The settings will take effect afte
 
     * **`stop`** - stop bot after retrying X times (as defined in `error_max_retries`)  with a delay between retries (as defined in `error_retry_delay`). If the bot reaches the `error_max_retries` value, it will remove the message from the pipeline and stop. If the option `error_dump_message` is also enable, the bot will dump the removed message to its dump file (to be found in var/log).
     
-    * **`pass`** - will skip this message and will process the next message after retrying X times, removing the current message from pipeline. If the option `error_dump_message` is also enable, then the bot will dump the removed message to its dump file.
+    * **`pass`** - will skip this message and will process the next message after retrying X times, removing the current message from pipeline. If the option `error_dump_message` is also enable, then the bot will dump the removed message to its dump file. After max retries are reached, the rate limit is applied (e.g. a collector bot fetch an unavailable resource does not try forever).
 
 * **`error_max_retries`** - in case of an error, the bot will try to re-start processing the current message X times as defined by this option. int value.
 
@@ -108,6 +116,8 @@ You can set these parameters per bot as well. The settings will take effect afte
 
 * **`error_dump_message`** - specifies if the bot will write queued up messages to its dump file (use intelmqdump to re-insert the message).
     * **`true/false`** - write or not write message to the dump file
+
+If the path `_on_error` exists for a bot, the message is also sent to this queue, instead of (only) dumping the file if configured to do so.
 
 #### Miscellaneous
 
@@ -119,6 +129,8 @@ You can set these parameters per bot as well. The settings will take effect afte
     * **`redis`** - Redis allows some persistence but is not so fast as ZeroMQ (in development). But note that persistence has to be manually activated. See http://redis.io/topics/persistence
 
 * **`rate_limit`** - time interval (in seconds) between messages processing.  int value.
+
+* **`ssl_ca_certificate`** - trusted CA certificate for IMAP connections (supported by some bots).
 
 * **`source_pipeline_host`** - broker IP, FQDN or Unix socket that the bot will use to connect and receive messages.
 
@@ -144,6 +156,39 @@ You can set these parameters per bot as well. The settings will take effect afte
 
 * **`http_verify_cert`** - defines if the bot will verify SSL certificates when performing HTTPS requests (e.g. bots/collectors/collector_http.py).
     * **`true/false`** - verify or not verify SSL certificates
+
+
+### Using supervisor as process manager (Beta)
+
+First of all: Do not use it in production environments yet! It has not been tested thoroughly yet.
+
+[Supervisor](http://supervisord.org) is process manager written in Python. The main advantage is that it take care about processes, so if bot process exit with failure (exit code different than 0), supervisor try to run it again. Another advantage is that it not require writing PID files.
+
+This was tested on Ubuntu 18.04.
+
+Install supervisor. `supervisor_twiddler` is extension for supervisor, that makes possible to create process dynamically. (Ubuntu `supervisor` package is currently based on Python 2, so `supervisor_twiddler` must be installed with Python 2 `pip`.)
+```
+apt install supervisor python-pip
+pip install supervisor_twiddler
+```
+
+
+Create default config `/etc/supervisor/conf.d/intelmq.conf` and restart `supervisor` service:
+
+```ini
+[rpcinterface:twiddler]
+supervisor.rpcinterface_factory=supervisor_twiddler.rpcinterface:make_twiddler_rpcinterface
+
+[group:intelmq]
+```
+
+Change IntelMQ process manager in `/opt/intelmq/etc/defaults.conf`:
+
+```
+"process_manager": "supervisor",
+```
+
+After this it is possible to manage bots like before with `intelmqctl` command.
 
 ## Pipeline Configuration
 
@@ -188,6 +233,7 @@ Note that `destination-queues` contains one of the following values:
 ```
 In that case, bot will be able to send the message to one of defined paths. The path `"_default"` is used if none is not specified.
 In case of errors during processing, and the optional path `"_on_error"` is specified, the message will be sent to the pipelines given given as on-error.
+Other destination queues can be explicitly addressed by the bots, e.g. bots with filtering capabilities.
 
 >>>>>>> sieve-named-queues
 **Example:**
@@ -206,6 +252,46 @@ In case of errors during processing, and the optional path `"_on_error"` is spec
 Note that a bot must only have one (input) source queue but may have multiple destination queues.
 
 More examples can be found at `intelmq/etc/pipeline.conf` directory in IntelMQ repository.
+
+### AMQP (Beta)
+
+Starting with IntelMQ 1.2 the AMQP protocol is supported as message queue.
+To use it, install a broker, for example RabbitMQ.
+The configuration and the differences are outlined here.
+Keep in mind that it is slower, but has better monitoring capabilities and is more stable.
+The AMQP support is considered beta, so small problems might occur. So far, only RabbitMQ as broker has been tested.
+
+You can change the broker for single bots (set the parameters in the runtime configuration per bot) or for the whole botnet (in defaults configuration).
+
+You need to set the parameter `source_pipeline_broker`/`destination_pipeline_broker` to `amqp`. There are more parameters available:
+
+* `destination_pipeline_broker`: `"amqp"`
+* `destination_pipeline_host` (default: `'127.0.0.1'`)
+* `destination_pipeline_port` (default: 5672)
+* `destination_pipeline_username`
+* `destination_pipeline_password`
+* `destination_pipeline_socket_timeout` (default: no timeout)
+* `destination_pipeline_amqp_exchange`: Only change/set this if you know what you do. If set, the destination queues are not declared as queues, but used as routing key. (default: `''`).
+* `destination_pipeline_amqp_virtual_host` (default: `'/'`)
+* `source_pipeline_host` (default: `'127.0.0.1'`)
+* `source_pipeline_port` (default: 5672)
+* `source_pipeline_username`
+* `source_pipeline_password`
+* `source_pipeline_socket_timeout` (default: no timeout)
+* `source_pipeline_amqp_exchange`: Only change/set this if you know what you do. If set, the destination queues are not declared as queues, but used as routing key. (default: `''`).
+* `source_pipeline_amqp_virtual_host` (default: `'/'`)
+* `intelmqctl_rabbitmq_monitoring_url` string, see below (default: `"http://{host}:15672"`)
+
+For getting the queue sizes, `intelmqctl` needs to connect to the monitoring interface of RabbitMQ. If the monitoring interface is not available under "http://{host}:15672" you can manually set using the parameter `intelmqctl_rabbitmq_monitoring_url`.
+In a RabbitMQ's default configuration you might not provide a user account, as by default the administrator (`guest`:`guest`) allows full access from localhost. If you create a separate user account, make sure to add the tag "monitoring" to it, otherwise IntelMQ can't fetch the queue sizes.
+![RabbitMQ User Account Monitoring Tag](./images/rabbitmq-user-monitoring.png)
+
+Setting the statistics (and cache) parameters is necessary when the local redis is running under a non-default host/port. If this is the case, you can set them explicitly:
+
+* `statistics_database`: `3`
+* `statistics_host`: `"127.0.0.1"`
+* `statistics_password`: `null`
+* `statistics_port`: `6379`
 
 ## Runtime Configuration
 
@@ -265,6 +351,20 @@ By default, all of the bots are started when you start the whole botnet, however
     }
 }
 ```
+
+### Multithreading (Beta)
+
+First of all: Do not use it in production environments yet! There are a few bugs, see below
+
+Since IntelMQ 2.0 it is possible to provide the following parameter:
+  * `instances_threads`
+Set it to a non-zero integer, then this number of worker threads will be spawn.
+This is useful if bots often wait for system resources or if network-based lookups are a bottleneck.
+
+However, there are currently a few cavecats:
+  * This is not possible for all bots, there are some exceptions (collectors and some outputs), see the [FAQ](FAQ.md#multithreading-is-not-available-for-this-bot) for some reasons.
+  * Only use it with the AMQP pipeline, as with Redis, messages may get duplicated because there's only one internal queue
+  * In the logs, you can see the main thread initializing first, then all of the threads which log with the name `[bot-id].[thread-id]`.
 
 ## Harmonization Configuration
 
@@ -475,6 +575,7 @@ You can schedule the bot with a crontab-entry like this:
 ```
 
 Bots configured as `scheduled` will exit after the first successful run.
+Setting `enabled` to `false` will cause the bot to not start with `intelmqctl start`, but only with an explicit start, in this example `intelmqctl start blocklistde-apache-collector`.
 
 
 #### Continuous Run Mode
@@ -501,6 +602,11 @@ intelmqctl start blocklistde-apache-parser
 
 Bots configured as `continuous` will never exit except if there is an error and the error handling configuration requires the bot to exit. See the Error Handling section for more details.
 
+
+#### Reloading
+
+Whilst restart is a mere stop & start, performing `intelmqctl reload <bot_id>` will not stop the bot, permitting it to keep the state: the same common behavior as for (Linux) daemons. It will initialize again (including reading all configuration again) after the current action is finished. Also, the rate limit/sleep is continued (with the *new* time) and not interrupted like with the restart command. So if you have a collector with a rate limit of 24 h, the reload does not trigger a new fetching of the source at the time of the reload, but just 24 h after the last run – with the new configuration. 
+Which state the bots are keeping depends on the bots of course.
 
 #### Forcing reset pipeline and cache (be careful)
 
@@ -557,6 +663,11 @@ Interactive actions after a file has been selected:
   > s 0,4,5
   Show the selected IP in a readable format. It's still a raw format from
   repr, but with newlines for message and traceback.
+- v, Edit by ID
+  > v id
+  > v 0
+  > v 1,2
+  Opens an editor (by calling `sensible-editor`) on the message. The modified message is then saved in the dump.
 - q, Quit
   > q
 
@@ -578,6 +689,8 @@ recover (a)ll, delete (e)ntries, (d)elete file, (q)uit, (s)how by ids, (r)ecover
 Deleted file /opt/intelmq/var/log/dragon-research-group-ssh-parser.dump
 ```
 
+Bots and the intelmqdump tool use file locks to prevent writing to already opened files. Bots are trying to lock the file for up to 60 seconds if the dump file is locked already by another process (intelmqdump) and then give up. Intelmqdump does not wait and instead only shows an error message.
+
 ## Monitoring Logs
 
 All bots and `intelmqctl` log to `/opt/intelmq/var/log/`. In case of failures, messages are dumped to the same directory with the file ending `.dump`.
@@ -588,16 +701,19 @@ tail -f /opt/intelmq/var/log/*.log
 
 # Uninstall
 
+If you installed intelmq with native packages: Use the package management tool to remove the package `intelmq`. These tools do not remove configuration by default.
+
+If you installed manually via pip (note that this also deletes all configuration and possibly data):
 ```bash
-pip uninstall intelmq
-rm -rf /opt/intelmq
+pip3 uninstall intelmq
+rm -r /opt/intelmq
 ```
 
 # Integration with ticket systems, etc.
 First of all, IntelMQ is a message (event) processing system: it collects feeds, processes them, enriches them, filters them and then stores them somewhere or sends them to another system. It does this in a composable, data flow oriented fashion, based on single events. There are no aggregation or grouping features. Now, if you want to integrate IntelMQ with your ticket system or some other system, you need to send its output to somewhere where your ticket system or other services can pick up IntelMQ's data. This could be a database, splunk, or you could send your events directly via email to a ticket system.
 
 Different users came up with different solutions for this, each of them fitting their own organisation. Hence these solutions are not part of the core IntelMQ repository. 
-  * CERT.at uses a postgresql DB (postgres output bot) and has a small tool `intelmqcli` which fetches the events in the postgresql DB which are marked as "new" and will group them and send them out via the RT ticket system.
+  * CERT.at uses a postgresql DB (sql output bot) and has a small tool `intelmqcli` which fetches the events in the postgresql DB which are marked as "new" and will group them and send them out via the RT ticket system.
   * Others, including BSI, use a tool called `intelmq-mailgen`. It sends E-Mails to the recipients, optionally PGP-signed with defined text-templates, CSV formatted attachments with grouped events and generated ticket numbers.
 
 The following lists external github repositories which you might consult for examples on how to integrate IntelMQ into your workflow:
@@ -617,15 +733,3 @@ Consult the [FAQ](FAQ.md) if you encountered any problems.
 ## Bash Completion
 
 To enable bash completion on `intelmqctl` and `intelmqdump` in order to help you run the commands in an easy manner, follow the installation process [here](../contrib/bash-completion/README.md).
-
-## Performance Tests
-
-Some tests have been made with a virtual machine with 
-the following specifications:
-
-* CPU: 1 core dedicated from i7 processor
-* Memory: 4GB
-* HDD: 10GB
-
-The entire solution didn't have any problem handling 2.000.000 
-queued events in memory with bots digesting the messages.

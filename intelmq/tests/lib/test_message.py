@@ -34,6 +34,7 @@ FEED_FIELDS = {'feed.accuracy': 80,
                'feed.provider': 'Feed Provider',
                'feed.url': 'https://www.example.com',
                'rtir_id': 1337,
+               'extra.mail_subject': 'This is a test',
                }
 
 
@@ -532,10 +533,12 @@ class TestMessageFactory(unittest.TestCase):
                          event.serialize())
 
     def test_event_from_report(self):
+        """ Data from report should be in event, except for extra. """
         report = self.new_report()
         report.update(FEED_FIELDS)
         event = message.Event(report, harmonization=HARM)
-        self.assertDictContainsSubset(event, FEED_FIELDS)
+        del report['extra']
+        self.assertDictContainsSubset(event, report)
 
     def test_event_hash_regex(self):
         """ Test if the regex for event_hash is tested correctly. """
@@ -657,6 +660,14 @@ class TestMessageFactory(unittest.TestCase):
         event.add('extra.test', 'foobar')
         self.assertEqual(event['extra.test'], 'foobar')
 
+    def test_message_extra_get(self):
+        """
+        Test if extra field can be get with .get().
+        """
+        event = self.new_event()
+        event.add('extra.test', 'foobar')
+        self.assertEqual(event.get('extra'), '{"test": "foobar"}')
+
     def test_message_extra_set_oldstyle_string(self):
         """
         Test if extra accepts a string (backwards-compat) and field can be get.
@@ -675,14 +686,35 @@ class TestMessageFactory(unittest.TestCase):
         self.assertEqual(event['extra'], '{"foo": "bar"}')
         self.assertEqual(event['extra.foo'], 'bar')
 
-    def test_message_extra_set_dict_ignore_empty(self):
+    def test_message_extra_set_oldstyle_dict_overwrite_empty(self):
+        """
+        Test if extra behaves backwards compatible concerning overwrite and empty items
+        """
+        event = self.new_event()
+        event["extra"] = {"a": {"x": 1}, "b": "foo"}
+        self.assertEqual(json.loads(event['extra']),
+                         {"a": {"x": 1}, "b": "foo"})
+        event.add("extra", {"a": {}}, overwrite=True)
+        self.assertEqual(json.loads(event['extra']),
+                         {"a": {}})
+
+    def test_message_extra_set_dict_empty(self):
         """
         Test if extra accepts a dict and field can be get.
         """
         event = self.new_event()
         event.add('extra', {"foo": ''})
-        with self.assertRaises(KeyError):
-            event['extra.foo']
+        self.assertEqual(json.loads(event['extra']),
+                         {"foo": ''})
+
+    def test_message_extra_in_backwardcomp(self):
+        """
+        Test if 'extra' in event works for backwards compatibility.
+        """
+        event = self.new_event()
+        self.assertFalse('extra' in event)
+        event.add('extra.foo', 'bar')
+        self.assertTrue('extra' in event)
 
     def test_overwrite_true(self):
         """

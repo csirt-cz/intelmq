@@ -21,7 +21,7 @@ from intelmq.lib.utils import base64_decode
 PORT = 5011
 SEPARATOR = '\n'
 INPUT1 = {'classification.taxonomy': 'malicious code',
-          'classification.type': 'c&c',
+          'classification.type': 'c2server',
           'feed.name': 'Example feed',
           'feed.accuracy': 100.0,
           'feed.url': 'http://localhost/two_files.tar.gz',
@@ -38,7 +38,6 @@ INPUT2 = {'feed.name': 'Example feed 2',
           'feed.url': 'http://localhost/two_files.tar.gz',
           'raw': utils.base64_encode('foo text\n')}
 ORIGINAL_DATA = ('some random input{}another line').format(SEPARATOR)
-
 
 class Client:
     """ You find here an example of a non-intelmq client that might connect to the bot. """
@@ -71,13 +70,13 @@ class TestTCPOutputBot(test.BotTestCase, unittest.TestCase):
         cls.bot_reference = TCPOutputBot
         cls.sysconfig = {'hierarchical_output': False,
                          'ip': 'localhost',
-                         'port': PORT
+                         'port': PORT,
+                         'counterpart_is_intelmq': True,
                          }
 
     def _delayed_start(self):
         sleep(2)
         self.assertEqual = lambda *args, **kwargs: True
-        # print(self.bot_id)
         self.run_bot(iterations=len(self.input_message))
 
 
@@ -100,7 +99,7 @@ class TestTCPCollectorBot(test.BotTestCase, unittest.TestCase):
                          'port': PORT
                          }
 
-    def Xtest_random_input(self):
+    def test_random_input(self):
         """ Check how we handle a random input, coming from an unknown source. We should put all the data to report['raw']. """
         thread = threading.Thread(target=Client().random_client)
         thread.start()
@@ -191,5 +190,5 @@ class TestTCPCollectorBot(test.BotTestCase, unittest.TestCase):
         self.assertOutputQueueLen(client_count * msg_count + 2)
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover
     unittest.main()

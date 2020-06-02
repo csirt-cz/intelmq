@@ -8,7 +8,9 @@ TODO: clear_queues
 TODO: acknowledge
 TODO: check internal representation of data in redis (like with Pythonlist)
 """
-
+import logging
+import os
+import time
 import unittest
 
 import intelmq.lib.pipeline as pipeline
@@ -28,7 +30,10 @@ class TestPipeline(unittest.TestCase):
 
     def setUp(self):
         params = Parameters()
-        self.pipe = pipeline.PipelineFactory.create(params)
+        logger = logging.getLogger('foo')
+        logger.addHandler(logging.NullHandler())
+        self.pipe = pipeline.PipelineFactory.create(params,
+                                                    logger=logger)
         self.pipe.set_queues('test-bot-input', 'source')
 
     def test_creation_from_string(self):
@@ -54,7 +59,10 @@ class TestPythonlist(unittest.TestCase):
     def setUp(self):
         params = Parameters()
         params.broker = 'Pythonlist'
-        self.pipe = pipeline.PipelineFactory.create(params)
+        logger = logging.getLogger('foo')
+        logger.addHandler(logging.NullHandler())
+        self.pipe = pipeline.PipelineFactory.create(params,
+                                                    logger=logger)
         self.pipe.set_queues('test-bot-input', 'source')
         self.pipe.set_queues('test-bot-output', 'destination')
 
@@ -90,6 +98,18 @@ class TestPythonlist(unittest.TestCase):
         self.assertEqual(self.pipe.count_queued_messages('test-bot-input', 'test-bot-output'),
                          {'test-bot-input': 1, 'test-bot-output': 2})
 
+    def test_has_message(self):
+        self.assertFalse(self.pipe._has_message)
+        self.pipe.state['test-bot-input'] = [SAMPLES['normal'][0]]
+        self.pipe.receive()
+        self.assertTrue(self.pipe._has_message)
+
+    def test_reject(self):
+        self.pipe.state['test-bot-input'] = [SAMPLES['normal'][0]]
+        self.pipe.receive()
+        self.pipe.reject_message()
+        self.assertEqual(SAMPLES['normal'][1], self.pipe.receive())
+
     def tearDown(self):
         self.pipe.state = {}
 
@@ -100,7 +120,14 @@ class TestRedis(unittest.TestCase):
     def setUp(self):
         params = Parameters()
         params.broker = 'Redis'
-        self.pipe = pipeline.PipelineFactory.create(params)
+        setattr(params, 'source_pipeline_password', os.getenv('INTELMQ_TEST_REDIS_PASSWORD'))
+        setattr(params, 'source_pipeline_db', 4)
+        setattr(params, 'destination_pipeline_password', os.getenv('INTELMQ_TEST_REDIS_PASSWORD'))
+        setattr(params, 'destination_pipeline_db', 4)
+        logger = logging.getLogger('foo')
+        logger.addHandler(logging.NullHandler())
+        self.pipe = pipeline.PipelineFactory.create(params,
+                                                    logger)
         self.pipe.set_queues('test', 'source')
         self.pipe.set_queues('test', 'destination')
         self.pipe.connect()
@@ -127,9 +154,81 @@ class TestRedis(unittest.TestCase):
         self.pipe.send(SAMPLES['unicode'][0])
         self.assertEqual(self.pipe.count_queued_messages('test'), {'test': 3})
 
+    def test_has_message(self):
+        self.assertFalse(self.pipe._has_message)
+        self.pipe.send(SAMPLES['normal'][0])
+        self.pipe.receive()
+        self.assertTrue(self.pipe._has_message)
+
+    def test_reject(self):
+        self.pipe.send(SAMPLES['normal'][0])
+        self.pipe.receive()
+        self.pipe.reject_message()
+        self.assertEqual(SAMPLES['normal'][1], self.pipe.receive())
+
     def tearDown(self):
         self.pipe.disconnect()
         self.clear()
+
+
+@test.skip_exotic()
+class TestAmqp(unittest.TestCase):
+
+    def setUp(self):
+        params = Parameters()
+        params.broker = 'Amqp'
+        logger = logging.getLogger('foo')
+        logger.addHandler(logging.NullHandler())
+        self.pipe = pipeline.PipelineFactory.create(params,
+                                                    logger=logger)
+        self.pipe.set_queues('test', 'source')
+        self.pipe.set_queues('test', 'destination')
+        self.pipe.connect()
+
+    def clear(self):
+        self.pipe.clear_queue(self.pipe.internal_queue)
+        self.pipe.clear_queue(self.pipe.source_queue)
+
+    def test_send_receive(self):
+        """ Sending and receiving bytes. """
+        self.clear()
+        self.pipe.connect()
+        self.pipe.send(SAMPLES['normal'][0])
+        self.assertEqual(SAMPLES['normal'][1], self.pipe.receive())
+
+    def test_send_receive_unicode(self):
+        """ Sending and receiving unicode. """
+        self.clear()
+        self.pipe.connect()
+        self.pipe.send(SAMPLES['unicode'][1])
+        self.assertEqual(SAMPLES['unicode'][1], self.pipe.receive())
+
+    # it's crazy
+    @unittest.expectedFailure
+    def test_count(self):
+        self.clear()
+        self.pipe.connect()
+        self.pipe.send(SAMPLES['normal'][0])
+        self.pipe.send(SAMPLES['normal'][1])
+        self.pipe.send(SAMPLES['unicode'][0])
+        time.sleep(0.006)
+        self.assertEqual(self.pipe.count_queued_messages('test'), {'test': 3})
+
+    def test_has_message(self):
+        self.assertFalse(self.pipe._has_message)
+        self.pipe.send(SAMPLES['normal'][0])
+        self.pipe.receive()
+        self.assertTrue(self.pipe._has_message)
+
+    def test_reject(self):
+        self.pipe.send(SAMPLES['normal'][0])
+        self.pipe.receive()
+        self.pipe.reject_message()
+        self.assertEqual(SAMPLES['normal'][1], self.pipe.receive())
+
+    def tearDown(self):
+        self.clear()
+        self.pipe.disconnect()
 
 
 if __name__ == '__main__':  # pragma: no cover

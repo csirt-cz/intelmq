@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
-import re
 from html.parser import HTMLParser
 
 from intelmq.lib import utils
-from intelmq.lib.bot import ParserBot
+from intelmq.lib.bot import Bot
 
 
 class MyHTMLParser(HTMLParser):
@@ -24,7 +23,7 @@ class MyHTMLParser(HTMLParser):
 parser = MyHTMLParser()
 
 
-class ThreatminerParserBot(ParserBot):
+class ThreatminerParserBot(Bot):
     def process(self):
         report = self.receive_message()
         raw_report = utils.base64_decode(report["raw"])
