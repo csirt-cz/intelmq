@@ -44,14 +44,11 @@ class MailSendOutputBot(Bot):
     def process(self):
         message = self.receive_message()
 
-        self.logger.debug(message)
-
         if "source.abuse_contact" in message:
             field = message["source.abuse_contact"]
-            self.logger.warning(f"{self.key}{field}")
+            self.logger.debug(f"{self.key}{field}")
             for mail in (field if isinstance(field, list) else [field]):
                 self.cache.redis.rpush(f"{self.key}{mail}", message.to_json())
-            self.logger.warning("done")
 
         self.acknowledge_message()
 
@@ -213,8 +210,8 @@ class MailSendOutputBot(Bot):
                         continue
                 else:
                     # XX will be visible both warning and print?
-                    print(f"!! {mail_record} timeout, too big to read from redis", flush=True)
-                    self.logger.warning(f"!! {mail_record} timeout, too big to read from redis")
+                    print(f"Warning: {mail_record} timeout, too big to read from redis", flush=True)
+                    self.logger.warning(f"Warning: {mail_record} timeout, too big to read from redis")
                     self.timeout.append(mail_record)
                     continue
 
