@@ -303,9 +303,6 @@ class MailSendOutputBot(Bot):
             subject += f" (intended for {intended_to})"
         else:
             subject += f" ({email_to})"
-        recipients = [email_to]
-        if hasattr(self.parameters, 'bcc') and not intended_to:
-            recipients += self.parameters.bcc  # bcc is in fact an independent mail
 
         if send is True:
             if not mail.count:
@@ -313,6 +310,7 @@ class MailSendOutputBot(Bot):
             return (Envelope(text)
                     .attach(path=mail.path, name=f'proki_{time.strftime("%Y%m%d")}.zip')
                     .from_(email_from).to(email_to)
+                    .bcc([] if intended_to else getattr(self.parameters, 'bcc', []))
                     .subject(subject)
                     .gpg()
                     .smtp(self.parameters.smtp_server)
